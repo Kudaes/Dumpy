@@ -71,7 +71,7 @@ pub fn dump() {
         
         println!("{}{}{}",&lc!("[-] Retrieved "), (*shi).number_of_handles, &lc!(" handles. Starting analysis..."));
         let mut shtei: *mut SYSTEM_HANDLE_TABLE_ENTRY_INFO = std::mem::transmute(&(*shi).handles);
-        for _x in 0..(*shi).number_of_handles 
+        for x in 0..(*shi).number_of_handles 
         {
 
             if (*shtei).process_id > 4
@@ -289,8 +289,11 @@ pub fn dump() {
             }
 
             shtei = shtei.add(1);
+
+            if x == (*shi).number_of_handles - 1
+            {
+                println!("{}",&lc!("[x] Execution failed. Exiting."));
+            }
         }            
     }
-
-    println!("{}",&lc!("[x] Execution failed. Exiting."));
 }

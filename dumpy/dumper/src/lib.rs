@@ -93,7 +93,7 @@ pub fn dump() {
                         target,
                         GetCurrentProcess(),
                         dup_handle,
-                        0x0400|0x0010,
+                        0x0400|0x0010, // PROCESS_QUERY_INFORMATION & PROCESS_VM_READ 
                         0,
                         0
                     );

@@ -11,4 +11,4 @@ After that, simply compile the code and execute it:
 	cargo build
 	dumpy.exe
 
-A succesfull execution will create a dump file called foo.dmp in the current directory.
+A succesful execution will create a dump file called foo.dmp in the current directory.

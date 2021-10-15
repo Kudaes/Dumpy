@@ -482,7 +482,7 @@ pub fn load_library_a(module: &str) -> Result<i64, String> {
     {    
 
         let module_base_address = get_module_base_address(&lc!("kernel32.dll")); 
-        let mut result = HINSTANCE {0: 0 as isize};
+        let result;
         if module_base_address != 0
         {
             let function_address = get_function_address(module_base_address, &lc!("LoadLibraryA"));
@@ -532,7 +532,7 @@ pub fn open_process(desired_access: u32, inherit_handle: i32, process_id: u32) -
     {    
 
         let module_base_address = get_module_base_address(&lc!("kernel32.dll")); 
-        let mut handle = HANDLE {0: 0 as isize};
+        let handle;
         if module_base_address != 0
         {
             let function_address = get_function_address(module_base_address, &lc!("OpenProcess"));

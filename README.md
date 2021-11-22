@@ -9,6 +9,8 @@ Since we are using [LITCRYPT](https://github.com/anvie/litcrypt.rs) plugin to ob
 After that, simply compile the code and execute it:
 
 	cargo build
-	dumpy.exe
+	dumpy.exe dump "your secret key"
 
-A succesful execution will create a dump file called foo.dmp in the current directory.
+A succesful execution will create an xor encrypted dump file with a random name in the current directory. In order to decrypt the file, execute dumpy as follows:
+
+	dumpy.exe decrypt input_file.dmp output_file.dmp "your secret key"

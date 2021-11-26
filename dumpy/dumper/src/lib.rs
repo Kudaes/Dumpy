@@ -291,21 +291,6 @@ pub fn dump(key: &str) {
                                 None => {shtei = shtei.add(1); continue;},
                             }
 
-                           /* if transaction_handle.0 == -1
-                            {
-                                let func: GetLastError;
-                                let ret: Option<u32>;
-                                dinvoke::dynamic_invoke!(
-                                    kernel32,
-                                    &lc!("GetLastError"),
-                                    func,
-                                    ret,
-                                );
-
-                                println!("Error: {}", ret.unwrap());
-                                break;
-                            }*/
-
                             let func: CreateFileTransactedA;
                             let ret: Option<HANDLE>;
                             let mini: *const u32 = std::mem::transmute(&0xffff);

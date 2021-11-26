@@ -13,4 +13,4 @@ After that, simply compile the code and execute it:
 
 A succesful execution will create an xor encrypted dump file with a random name in the current directory. In order to decrypt the file, execute dumpy as follows:
 
-	dumpy.exe decrypt input_file.dmp output_file.dmp "your secret key"
+	dumpy.exe decrypt input_file_name output_file_name "your secret key"

@@ -5,7 +5,8 @@ use bindings::Windows::Win32::{Foundation::{BOOL, HANDLE, HINSTANCE, PSTR}, Secu
 pub type PVOID = *mut c_void;
 pub type DWORD = u32;
 pub type EAT = BTreeMap<i64,String>;
-pub type EntryPoint =  extern "system" fn (HINSTANCE, u32, *mut c_void) -> BOOL;
+pub type EntryPoint = extern "system" fn (HINSTANCE, u32, *mut c_void) -> BOOL;
+pub type SetHandleInformation = extern "system" fn (HANDLE, u32, u32) -> BOOL;
 pub type LoadLibraryA = unsafe extern "system" fn (PSTR) -> HINSTANCE;
 pub type OpenProcess = unsafe extern "system" fn (u32, i32, u32) -> HANDLE;
 pub type QueryFullProcessImageNameW = unsafe extern "system" fn (HANDLE, u32, *mut u16, *mut u32) -> i32;

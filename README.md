@@ -4,6 +4,8 @@ This tool dynamically calls MiniDumpWriteDump to dump lsass memory content. This
 
 NtOpenProcess is hooked before calling MiniDumpWriteDump to avoid the opening of a new process handle over lsass.
 
+NTFS Transaction are used in order to xor the memory dump before storing it on disk.
+
 Since we are using [LITCRYPT](https://github.com/anvie/litcrypt.rs) plugin to obfuscate string literals, it is required to set up the environment variable LITCRYPT_ENCRYPT_KEY before compiling the code:
 
 	set LITCRYPT_ENCRYPT_KEY="yoursupersecretkey"

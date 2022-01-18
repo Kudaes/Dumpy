@@ -15,6 +15,7 @@ use data::{CreateFileMapping, CreateFileTransactedA, CreateTransaction, GetFileS
 static mut STATIC_HANDLE: isize = 0;
 
 // #[no_mangle]
+// pub extern "Rust" fn
 pub fn dump(key: &str) {
 
     unsafe 

@@ -492,7 +492,6 @@ pub fn dump(key: &str) {
                                             println!("{}",&lc!("[+] Transaction successfully rollbacked."));
                                         }
 
-                                        let _r = dinvoke::close_handle(*dup_handle).unwrap();
                                         let _r = dinvoke::close_handle(transacted_file_handle).unwrap();
                                         let _r = dinvoke::close_handle(map_handle).unwrap();
                                         let _r = dinvoke::close_handle(transaction_handle).unwrap();

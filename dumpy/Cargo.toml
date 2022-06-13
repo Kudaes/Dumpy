@@ -5,8 +5,10 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.dev.package.dumpy]
-opt-level = 3
+opt-level = 'z'
+debug = 0
 
 [dependencies]
 dumper = { path = "dumper"}
 litcrypt = "0.3"
+clap = { version = "3.1.6", features = ["derive"] }

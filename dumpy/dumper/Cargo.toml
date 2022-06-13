@@ -5,7 +5,7 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.dev.package.dumper]
-opt-level = 3
+opt-level = 'z'
 debug = 0
 
 [dependencies]
@@ -15,3 +15,4 @@ dinvoke = { path = "../dinvoke" }
 litcrypt = "0.3"
 ureq = "*"
 rand = "0.8.4"
+base64 = "*"

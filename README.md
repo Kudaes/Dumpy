@@ -42,4 +42,4 @@ Dumpy has two main actions:
 
 - **decrypt**: This action allows to obtain the decrypted memory dump in the same format that tools like Mimikatz would expect. As arguments it expects the xored memory dump, the encryption key and the output file path. In case the xored file has been uploaded using HTTP, it is required to perform a base64 decoding before this decryption process.
 
-	dumpy.exe decrypt -i xored.txt -o decrypted.txt -k secretKey
+		dumpy.exe decrypt -i xored.txt -o decrypted.txt -k secretKey

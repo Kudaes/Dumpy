@@ -18,12 +18,12 @@ struct Arguments {
     /// Encryption key
     key: String,
     #[clap(default_value="c:\\temp\\input.txt",short, long)]
-    /// Encrypted input file
+    /// Encrypted dump file
     input_file: String,
     #[clap(default_value="c:\\temp\\output.txt",short, long)]
     /// Destination path
     output_file: String,
-    /// URL where the dump should be uploaded
+    /// Upload URL
     #[clap(default_value="http://remotehost/upload",short, long)]
     upload: String
 }

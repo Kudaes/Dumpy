@@ -1,12 +1,12 @@
 [package]
 name = "dumper"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.dev.package.dumper]
 opt-level = 2
-debug = 0
+debug = 2
 
 [dependencies]
 bindings = { path = "../bindings" }
@@ -16,3 +16,4 @@ litcrypt = "0.3"
 ureq = "*"
 rand = "0.8.4"
 base64 = "*"
+ntapi = "0.3.7"

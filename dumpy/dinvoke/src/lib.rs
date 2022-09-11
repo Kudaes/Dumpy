@@ -9,7 +9,7 @@ use libc::c_void;
 use litcrypt::lc;
 use winproc::Process;
 
-use bindings::Windows::Win32::{Foundation::{HANDLE, HINSTANCE, PSTR, BOOL}, System::{WindowsProgramming::{OBJECT_ATTRIBUTES, CLIENT_ID}, Diagnostics::Debug::{MINIDUMP_EXCEPTION_INFORMATION, MINIDUMP_USER_STREAM_INFORMATION, MINIDUMP_CALLBACK_INFORMATION}}, Security::SECURITY_ATTRIBUTES};
+use bindings::Windows::Win32::{Foundation::{HANDLE, HINSTANCE, PSTR, BOOL}, System::{WindowsProgramming::{OBJECT_ATTRIBUTES, CLIENT_ID, IO_STATUS_BLOCK}, Diagnostics::Debug::{MINIDUMP_EXCEPTION_INFORMATION, MINIDUMP_USER_STREAM_INFORMATION, MINIDUMP_CALLBACK_INFORMATION}}, Security::SECURITY_ATTRIBUTES};
 
 
 /// Retrieves the base address of a module loaded in the current process.
@@ -461,7 +461,7 @@ pub fn create_file_transacted(name: *mut u8, access: u32, mode: u32, attributes:
         let ret: Option<HANDLE>;
         let func_ptr: data::CreateFileTransactedA;
         let kernel32 = get_module_base_address(&lc!("kernel32.dll"));
-        dynamic_invoke!(kernel32,&lc!("CreateFileTransactedA"),func_ptr,ret,name,access,mode,attributes,disposition,flags,template,transaction,version,extended);
+        dynamic_invoke!(kernel32,&lc!("CreateFileTransactedW"),func_ptr,ret,name,access,mode,attributes,disposition,flags,template,transaction,version,extended);
 
         match ret {
             Some(x) => return x,
@@ -710,6 +710,45 @@ pub fn nt_query_system_information(system_information_class: u32, system_informa
         }
     } 
 }
+
+/// Dynamically calls NtQueryInformationThread.
+///
+/// It will return the NTSTATUS value returned by the call.
+pub fn nt_query_information_thread(handle: HANDLE, thread_information_class: u32, thread_information: PVOID, length: u32, return_length: *mut u32) -> i32 {
+    
+    unsafe 
+    {
+        let ret;
+        let func_ptr: data::NtQueryInformationProcess;
+        let ntdll = get_module_base_address(&lc!("ntdll.dll"));
+        dynamic_invoke!(ntdll,&lc!("NtQueryInformationThread"),func_ptr,ret,handle,thread_information_class,thread_information,length,return_length);
+
+        match ret {
+            Some(x) => return x,
+            None => return -1,
+        }
+    } 
+}
+
+/// Dynamically calls NtQueryInformationFile.
+///
+/// It will return the NTSTATUS value returned by the call.
+pub fn nt_query_information_file(handle: HANDLE, io: *mut IO_STATUS_BLOCK, file_information: PVOID, length: u32,file_information_class: u32) -> i32 {
+    
+    unsafe 
+    {
+        let ret;
+        let func_ptr: data::NtQueryInformationFile;
+        let ntdll = get_module_base_address(&lc!("ntdll.dll"));
+        dynamic_invoke!(ntdll,&lc!("NtQueryInformationFile"),func_ptr,ret,handle,io,file_information,length,file_information_class);
+
+        match ret {
+            Some(x) => return x,
+            None => return -1,
+        }
+    } 
+}
+
 
 /// Dynamically calls NtOpenProcess.
 ///

@@ -1,7 +1,7 @@
 [package]
 name = "dumpy"
-version = "0.1.0"
-edition = "2018"
+version = "0.2.0"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.dev.package.dumpy]
@@ -12,3 +12,6 @@ debug = 0
 dumper = { path = "dumper"}
 litcrypt = "0.3"
 clap = { version = "3.1.6", features = ["derive"] }
+
+[build-dependencies]
+static_vcruntime = "2.0"

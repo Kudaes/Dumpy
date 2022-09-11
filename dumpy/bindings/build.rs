@@ -5,9 +5,10 @@ fn main() {
             MINIDUMP_CALLBACK_INFORMATION},
         Windows::Win32::System::Memory::{VIRTUAL_ALLOCATION_TYPE,PAGE_PROTECTION_FLAGS},
         Windows::Win32::Foundation::{HANDLE,HINSTANCE,PSTR,BOOL},
-        Windows::Win32::System::Threading::{GetCurrentProcess,PROCESS_BASIC_INFORMATION},
-        Windows::Win32::System::SystemServices::{IMAGE_BASE_RELOCATION,IMAGE_IMPORT_DESCRIPTOR,IMAGE_THUNK_DATA32,IMAGE_THUNK_DATA64,OVERLAPPED},
+        Windows::Win32::System::Threading::{GetCurrentProcess,GetCurrentThread,PROCESS_BASIC_INFORMATION,STARTUPINFOW,PROCESS_INFORMATION},
+        Windows::Win32::System::SystemServices::{IMAGE_BASE_RELOCATION,IMAGE_IMPORT_DESCRIPTOR,IMAGE_THUNK_DATA32,IMAGE_THUNK_DATA64},
         Windows::Win32::System::WindowsProgramming::{PUBLIC_OBJECT_TYPE_INFORMATION,OBJECT_ATTRIBUTES,CLIENT_ID},
         Windows::Win32::Security::SECURITY_ATTRIBUTES,
+        Windows::Win32::System::WindowsProgramming::IO_STATUS_BLOCK
     );
 }

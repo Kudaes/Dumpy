@@ -1,6 +1,5 @@
 use std::{collections::BTreeMap, ffi::c_void};
-
-use bindings::Windows::Win32::{Foundation::{BOOL, HANDLE, HINSTANCE, PSTR}, Security::SECURITY_ATTRIBUTES, System::{Diagnostics::Debug::{IMAGE_DATA_DIRECTORY, IMAGE_OPTIONAL_HEADER32, IMAGE_SECTION_HEADER, MINIDUMP_CALLBACK_INFORMATION, MINIDUMP_EXCEPTION_INFORMATION, MINIDUMP_USER_STREAM_INFORMATION}, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES}}};
+use bindings::Windows::Win32::{Foundation::{BOOL, HANDLE, HINSTANCE, PSTR}, Security::SECURITY_ATTRIBUTES, System::{Diagnostics::Debug::{IMAGE_DATA_DIRECTORY, IMAGE_OPTIONAL_HEADER32, IMAGE_SECTION_HEADER, MINIDUMP_CALLBACK_INFORMATION, MINIDUMP_EXCEPTION_INFORMATION, MINIDUMP_USER_STREAM_INFORMATION}, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, IO_STATUS_BLOCK}, Threading::{STARTUPINFOW, PROCESS_INFORMATION}}};
 
 pub type PVOID = *mut c_void;
 pub type DWORD = u32;
@@ -12,6 +11,10 @@ pub type OpenProcess = unsafe extern "system" fn (u32, i32, u32) -> HANDLE;
 pub type QueryFullProcessImageNameW = unsafe extern "system" fn (HANDLE, u32, *mut u16, *mut u32) -> i32;
 pub type MiniDumpWriteDump = unsafe extern "system" fn (HANDLE, u32, HANDLE, u32, *mut MINIDUMP_EXCEPTION_INFORMATION,
     *mut MINIDUMP_USER_STREAM_INFORMATION, *mut MINIDUMP_CALLBACK_INFORMATION) -> i32;
+pub type DeviceIoControl = unsafe extern "system" fn (HANDLE, u32, PVOID, u32, PVOID, u32, *mut u32, *mut OVERLAPPED) -> BOOL;
+pub type CreateEvent = unsafe extern "system" fn (*const SECURITY_ATTRIBUTES, bool, bool, *const u16) -> HANDLE;
+pub type GetOverlappedResult = unsafe extern "system" fn (HANDLE, *mut OVERLAPPED, *mut u32, bool) -> BOOL;
+pub type CreateFile = unsafe extern "system" fn (*const u16, u32, u32, *const SECURITY_ATTRIBUTES, u32, u32, HANDLE) -> HANDLE;
 pub type CreateTransaction = unsafe extern "system" fn (*mut SECURITY_ATTRIBUTES, *mut GUID, u32, u32, u32, u32, *mut u16) -> HANDLE;
 pub type CreateFileTransactedA = unsafe extern "system" fn (*mut u8, u32, u32, *const SECURITY_ATTRIBUTES, u32, u32, HANDLE,
     HANDLE, *const u32, PVOID) -> HANDLE;
@@ -21,12 +24,15 @@ pub type CreateFileMapping = unsafe extern "system" fn (HANDLE, *const SECURITY_
 pub type MapViewOfFile = unsafe extern "system" fn (HANDLE, u32, u32, u32, usize) -> PVOID;
 pub type UnmapViewOfFile = unsafe extern "system" fn (PVOID) -> BOOL;
 pub type CloseHandle = unsafe extern "system" fn (HANDLE) -> i32;
+pub type CreateProcessWithLogon = unsafe extern "system" fn (*const u16, *const u16, *const u16, u32, *const u16, *mut u16, u32, *const c_void, *const u16, *const STARTUPINFOW, *mut PROCESS_INFORMATION) -> BOOL;
 pub type LdrGetProcedureAddress = unsafe extern "system" fn (PVOID, *mut String, u32, *mut PVOID) -> i32;
 pub type NtWriteVirtualMemory = unsafe extern "system" fn (HANDLE, PVOID, PVOID, usize, *mut usize) -> i32;
 pub type NtProtectVirtualMemory = unsafe extern "system" fn (HANDLE, *mut PVOID, *mut usize, u32, *mut u32) -> i32;
 pub type NtAllocateVirtualMemory = unsafe extern "system" fn (HANDLE, *mut PVOID, usize, *mut usize, u32, u32) -> i32;
 pub type NtQueryInformationProcess = unsafe extern "system" fn (HANDLE, u32, PVOID, u32, *mut u32) -> i32;
+pub type NtQueryInformationThread = unsafe extern "system" fn (HANDLE, u32, PVOID, u32, *mut u32) -> i32;
 pub type NtQuerySystemInformation = unsafe extern "system" fn (u32, PVOID, u32, *mut u32) -> i32;
+pub type NtQueryInformationFile = unsafe extern "system" fn (HANDLE, *mut IO_STATUS_BLOCK, PVOID, u32, u32) -> i32;
 pub type NtDuplicateObject = unsafe extern "system" fn (HANDLE, HANDLE, HANDLE, *mut HANDLE, u32, u32, u32) -> i32;
 pub type NtQueryObject = unsafe extern "system" fn (HANDLE, u32, PVOID, u32, *mut u32) -> i32;
 pub type NtOpenProcess = unsafe extern "system" fn (*mut HANDLE, u32, *mut OBJECT_ATTRIBUTES, *mut CLIENT_ID) -> i32;
@@ -54,7 +60,7 @@ pub const GENERIC_READ: u32 = 0x80000000;
 pub const GENERIC_WRITE: u32 = 0x40000000;
 pub const GENERIC_EXECUTE: u32 = 0x20000000;
 pub const GENERIC_ALL: u32 = 0x10000000;
-
+pub const THREAD_ALL_ACCESS: u32 =  0x000F0000 |  0x00100000 | 0xFFFF;
 
 
 #[derive(Clone)]
@@ -182,4 +188,81 @@ pub struct SYSTEM_HANDLE_TABLE_ENTRY_INFO {
     pub handle_value: u16,
     pub object: PVOID,
     pub granted_access: u32,
+}
+
+#[repr(C)]
+pub struct THREAD_BASIC_INFORMATION {
+    pub exit_status: i32,
+    pub teb_base_address: PVOID,
+    pub client_id: CLIENT_ID,
+    pub affinity_mask: usize,
+    pub priority: i32,
+    pub base_priority: i32,
+
+}
+
+#[repr(C)]
+pub struct OVERLAPPED {
+    pub internal: usize,
+    pub internal_high: usize,
+    pub anonymous: OVERLAPPED0,
+    pub event_handle: HANDLE,
+}
+
+impl Default for OVERLAPPED {
+    fn default() -> OVERLAPPED {
+        OVERLAPPED {
+            internal: 0usize,
+            internal_high: 0usize,
+            anonymous: OVERLAPPED0::default(),
+            event_handle: HANDLE::default(),  
+        }
+    }
+}
+
+pub union OVERLAPPED0 {
+    pub anonymous: OVERLAPPED_0_0,
+    pub pointer: *mut c_void,
+}
+
+impl Default for OVERLAPPED0 {
+    fn default() -> OVERLAPPED0 {
+        OVERLAPPED0 {
+            anonymous: OVERLAPPED_0_0::default(), 
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Default, PartialEq, Debug, Eq)]
+pub struct OVERLAPPED_0_0 {
+    pub offset: u32,
+    pub offset_high: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Default)]
+pub struct REQUEST_OPLOCK_INPUT_BUFFER {
+    pub structure_version: u16,
+    pub structure_length: u16,
+    pub requested_oplock_level: u32,
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Default)]
+pub struct REQUEST_OPLOCK_OUTPUT_BUFFER {
+    pub structure_version: u16,
+    pub structure_length: u16,
+    pub original_oplock_level: u32,
+    pub new_oplock_level: u32,
+    pub flags: u32,
+    pub access_mode: u32,
+    pub share_mode: u16,
+}
+
+#[repr(C)]
+pub struct FILE_PROCESS_IDS_USING_FILE_INFORMATION {
+    pub number_of_process_ids_in_list: u32,
+    pub process_id_list: [usize;1],
 }

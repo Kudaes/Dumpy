@@ -552,7 +552,7 @@ pub fn force_leakage()
         // 997 = ERROR_IO_PENDING
         if get_last_error_r.unwrap() != 997
         {
-            println!("{}",&lc!("[x] Lsass handle leakage failed."));
+            println!("{}",&lc!("[x] Handle leakage failed."));
             return;
         }
 
@@ -680,7 +680,7 @@ pub fn get_pid_from_image_path(path: &str) -> usize
             {
                 fpi = std::mem::transmute(ptr);
                 let _r = dinvoke::close_handle(file_handle);
-                // Access denied error pops if this pointer is not liberated
+                // Access denied error pops if this pointer is not liberated.
                 (*iosb).Anonymous.Pointer = ptr::null_mut();
                 return (*fpi).process_id_list[0];
             }

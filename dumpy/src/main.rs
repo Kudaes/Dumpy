@@ -34,7 +34,7 @@ fn start() {
     let args = Arguments::parse();
     let mut force = false;
     let mut upload = "".to_string();
-    if args.action == "dump".to_string()
+    if args.action == lc!("dump")
     {
         if args.upload != None
         {
@@ -48,7 +48,7 @@ fn start() {
         
         dumper::dump(&args.key, &upload, force);
     }
-    else if args.action == "decrypt".to_string()
+    else if args.action == lc!("decrypt")
     {
         dumper::decrypt(&args.input_file, &args.key, &args.output_file);
     }

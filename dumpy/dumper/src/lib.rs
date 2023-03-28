@@ -432,10 +432,14 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                                 .collect();
 
                                 if url == ""
-                                {                 
+                                {           
+                                    let holder: Vec<u8> = vec![0;dump_size as usize + 1];
+                                    let mut h: *mut u8 = holder.as_ptr() as *mut u8;
+                                    h = h.add(1);
+                                    std::ptr::copy_nonoverlapping(view_xor.as_ptr() as *const _, h, dump_size as usize);      
                                     let output_path = format!("{}{}", rand_string, ".txt");
                                     let mut file = std::fs::File::create(&output_path).unwrap();
-                                    let _r = file.write(&view_xor).unwrap();
+                                    let _r = file.write(holder.as_slice()).unwrap();
 
                                     println!("{} {}.", &lc!("[+] Memory dump written to file"), output_path.as_str());
 
@@ -800,7 +804,7 @@ pub fn decrypt (file_path: &str, key: &str, output_file: &str)
         file.read_to_end(&mut buffer).unwrap();
 
 
-        let mut buffer_ptr = buffer.as_ptr();
+        let mut buffer_ptr = buffer.as_ptr().add(1);
         let key = format!("{}{}", key, "\0");
         let mut key_ptr = key.as_ptr();
         let mut xor_key: u8 = *key_ptr;

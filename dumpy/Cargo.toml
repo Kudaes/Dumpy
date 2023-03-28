@@ -18,7 +18,7 @@ strip = true
 [dependencies]
 dumper = { path = "dumper"}
 litcrypt = "0.3"
-clap = { version = "3.1.6", features = ["derive"] }
+getopts = "0.2"
 
 [build-dependencies]
 static_vcruntime = "2.0"

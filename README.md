@@ -21,21 +21,18 @@ After that, simply compile the code and execute it:
 
 In case that you want to compile the tool for a x86 system, modify the value of the option "target" in the file .cargo\config (e.g: target = "i686-pc-windows-msvc").
 
-# Usage
+# Usage: dumpy.exe --dump|--decrypt [options]
 
-	USAGE:
-    dumpy.exe [OPTIONS] <ACTION> [FORCE]
-
-	ARGS:
-	    <ACTION>    Valid values: dump or decrypt
-	    <FORCE>     Force seclogon's service to leak a lsass handle through a race condition
-
-	OPTIONS:
-	    -h, --help                         Print help information
-	    -i, --input-file <INPUT_FILE>      Encrypted dump file [default: c:\temp\input.txt]
-	    -k, --key <KEY>                    Encryption key [default: 1234abcd]
-	    -o, --output-file <OUTPUT_FILE>    Destination path [default: c:\temp\output.txt]
-	    -u, --upload <UPLOAD>              Upload URL
+Options:
+    -h, --help          Print this help menu.
+        --dump          Dump lsass.
+        --decrypt       Decrypt a previously generated dump file.
+    -f, --force         Force seclogon's service to leak a lsass handle
+                        through a race condition.
+    -k, --key           Encryption key [default: 1234abcd]
+    -i, --input         Encrypted dump file [default: c:\temp\input.txt]
+    -o, --output        Destination path [default: c:\temp\output.txt]
+    -u, --upload        Upload URL
 
 Dumpy has two main actions:
 

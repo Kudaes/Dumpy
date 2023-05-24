@@ -733,7 +733,7 @@ pub fn hook () -> bool
             return false;
         }
 
-
+        let ntop_base_address = dinvoke::get_function_address(ntdll, &lc!("NtOpenProcess"));
         let ntop_ptr = ntop_base_address as *mut u8;
 
         if cfg!(target_pointer_width = "64") {

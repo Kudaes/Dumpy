@@ -2,19 +2,13 @@
 
 This tool dynamically calls MiniDumpWriteDump to dump lsass memory content. This process is done without opening a new process handle to lsass and using [DInvoke_rs](https://github.com/Kudaes/DInvoke_rs) to make it harder to detect its malicious behaviour. In order to obtain a valid process handle without calling OpenProcess over lsass, all process handles in the system are analyzed using NtQuerySystemInformation, NtDuplicateObject, NtQueryObject and QueryFullProcessImageNameW.
 
-NtOpenProcess is hooked before calling MiniDumpWriteDump to avoid the opening of a new process handle over lsass.
-
 NTFS Transaction are used in order to xor the memory dump before storing it on disk or sending it throught HTTP.
 
 **Support added for both x86 and x64**.
 
 # Compilation 
 
-Since we are using [LITCRYPT](https://github.com/anvie/litcrypt.rs) plugin to obfuscate string literals, it is required to set up the environment variable LITCRYPT_ENCRYPT_KEY before compiling the code:
-
-	C:\Users\User\Desktop\Dumpy\dumpy> set LITCRYPT_ENCRYPT_KEY="yoursupersecretkey"
-
-After that, simply compile the code and execute it:
+Just compile the code on `release` mode and execute it:
 
 	C:\Users\User\Desktop\Dumpy\dumpy> cargo build --release
 	C:\Users\User\Desktop\Dumpy\dumpy\target\x86_64-pc-windows-msvc\release> dumpy.exe -h

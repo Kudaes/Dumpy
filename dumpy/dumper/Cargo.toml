@@ -12,7 +12,7 @@ debug = 0
 bindings = { path = "../bindings" }
 data = { path = "../data" }
 dinvoke = { path = "../dinvoke" }
-litcrypt = "0.3"
+litcrypt2 = "0.1.2"
 ureq = "*"
 rand = "0.8.4"
 base64 = "*"

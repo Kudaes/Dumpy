@@ -1,12 +1,12 @@
 #[macro_use]
-extern crate litcrypt;
+extern crate litcrypt2;
 use_litcrypt!();
 
 use std::ptr;
 use std::ffi::CString;
 use data::{CloseHandle, DLL_PROCESS_ATTACH, EntryPoint, LdrGetProcedureAddress, LoadLibraryA, OpenProcess, PVOID, PeMetadata, GUID};
 use libc::c_void;
-use litcrypt::lc;
+use litcrypt2::lc;
 use winproc::Process;
 
 use bindings::Windows::Win32::{Foundation::{HANDLE, HINSTANCE, PSTR, BOOL}, System::{WindowsProgramming::{OBJECT_ATTRIBUTES, CLIENT_ID, IO_STATUS_BLOCK}, Diagnostics::Debug::{MINIDUMP_EXCEPTION_INFORMATION, MINIDUMP_USER_STREAM_INFORMATION, MINIDUMP_CALLBACK_INFORMATION}}, Security::SECURITY_ATTRIBUTES};
@@ -214,6 +214,8 @@ pub fn get_function_address_by_ordinal(module_base_address: isize, ordinal: u32)
 ///     
 /// }
 /// ```
+/// 
+#[allow(invalid_reference_casting)]
 pub fn ldr_get_procedure_address (module_handle: isize, function_name: &str, ordinal: u32) -> Result<isize, String> {
 
     unsafe 
@@ -576,6 +578,22 @@ pub fn rollback_transaction(transaction: HANDLE) -> bool {
             None => return false ,
         }
     }   
+}
+
+pub fn get_last_error() -> u32
+{
+    unsafe 
+    {    
+        let ret: Option<u32>;
+        let func_ptr: data::GetLastError;
+        let module_base_address = get_module_base_address(&lc!("kernel32.dll")); 
+        dynamic_invoke!(module_base_address,&lc!("GetLastError"),func_ptr,ret,);
+
+        match ret {
+            Some(x) => return x,
+            None => return 0xf, 
+        }
+    }
 }
 
 /// Dynamically calls SetHandleInformation.
